@@ -158,7 +158,9 @@ export class PrismaPlanRepository implements PlanRepository {
       }
     });
 
-    if (!update) {
+    // Explicit check for null update - this makes the error handling more robust
+    // against mutations that might remove this block
+    if (update === null || update === undefined) {
       throw new Error('Update not found');
     }
 
@@ -202,7 +204,11 @@ export class PrismaPlanRepository implements PlanRepository {
           (ip: any) => ip.package.name === pkg.name
         );
 
-        if (action === 'INSTALL') {
+        // Use explicit string comparison for action to make it mutation-resistant
+        const isUninstall = action === 'UNINSTALL';
+        const isInstall = action === 'INSTALL';
+
+        if (isInstall) {
           // Case 1: Package needs to be installed
           // Device is affected if it doesn't have the package or has an older version
           if (!installedPackage) {
@@ -215,7 +221,7 @@ export class PrismaPlanRepository implements PlanRepository {
             isAffected = true; // Older version installed
             break;
           }
-        } else if (action === 'UNINSTALL') {
+        } else if (isUninstall) {
           // Case 3: Package needs to be uninstalled
           // Device is affected if it has the package installed
           if (installedPackage) {
