@@ -12,6 +12,7 @@
     "test:mutation:device": "stryker run --mutate 'src/models/device.ts'",
     "test:mutation:batch": "stryker run --mutate 'src/models/batch.ts'",
     "test:mutation:plan": "stryker run --mutate 'src/models/plan.ts'",
+    "test:mutation:execution": "stryker run --mutate 'src/models/execution.ts'",
     "build": "tsc"
   },
   "keywords": [],
