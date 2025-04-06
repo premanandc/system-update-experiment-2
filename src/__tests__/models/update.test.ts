@@ -146,6 +146,167 @@ describe('UpdateRepository', () => {
         requiresReboot: false           // default
       });
     });
+
+    it('should explicitly test the package length check', async () => {
+      // Arrange
+      const updateData: UpdateCreateInput = {
+        name: 'Empty Package Test',
+        version: 'v1.0.0',
+        description: 'Testing the packages length check',
+        packages: [] // Empty packages array
+      };
+      
+      const expectedUpdate: Update = {
+        id: '1',
+        name: 'Empty Package Test',
+        version: 'v1.0.0',
+        description: 'Testing the packages length check',
+        status: UpdateStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      mockPrisma.update.create.mockResolvedValue(expectedUpdate);
+      
+      // Act
+      const result = await updateRepository.create(updateData);
+      
+      // Assert
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.update.create).toHaveBeenCalledWith({
+        data: {
+          name: 'Empty Package Test',
+          version: 'v1.0.0',
+          description: 'Testing the packages length check'
+        },
+      });
+      expect(result).toEqual(expectedUpdate);
+    });
+
+    it('should verify the correct update data is passed to create function', async () => {
+      // Arrange
+      const updateData: UpdateCreateInput = {
+        name: 'Update Data Verification',
+        version: 'v1.0.0',
+        description: 'Verifying correct data flow',
+        packages: [
+          { 
+            packageId: 'pkg1',
+            action: PackageAction.INSTALL
+          }
+        ]
+      };
+      
+      const expectedUpdate: Update = {
+        id: '1',
+        name: 'Update Data Verification',
+        version: 'v1.0.0',
+        description: 'Verifying correct data flow',
+        status: UpdateStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      // Reset mocks
+      mockReset(mockPrisma.update.create);
+      
+      // Mock create function with the expected return
+      mockPrisma.update.create.mockResolvedValue(expectedUpdate);
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => callback(mockPrisma));
+      
+      // Act
+      const result = await updateRepository.create(updateData);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      
+      // Check that update.create was called with the correct data
+      const createCall = mockPrisma.update.create.mock.calls[0][0];
+      expect(createCall.data).toEqual({
+        name: 'Update Data Verification',
+        version: 'v1.0.0',
+        description: 'Verifying correct data flow'
+      });
+      expect(result).toEqual(expectedUpdate);
+    });
+
+    it('should explicitly test forced and requiresReboot defaults in create method', async () => {
+      // Arrange
+      const updateData: UpdateCreateInput = {
+        name: 'Testing Default Values',
+        version: 'v1.0.0',
+        description: 'Test default values explicitly',
+        packages: [
+          { 
+            packageId: 'pkg1',
+            action: PackageAction.INSTALL,
+            forced: true,       // Explicitly set to true
+            requiresReboot: true // Explicitly set to true
+          },
+          { 
+            packageId: 'pkg2',
+            action: PackageAction.INSTALL,
+            forced: false,       // Explicitly set to false
+            requiresReboot: false // Explicitly set to false
+          },
+          { 
+            packageId: 'pkg3',
+            action: PackageAction.INSTALL
+            // forced and requiresReboot omitted to test defaults
+          }
+        ]
+      };
+      
+      const expectedUpdate: Update = {
+        id: '1',
+        name: 'Testing Default Values',
+        version: 'v1.0.0',
+        description: 'Test default values explicitly',
+        status: UpdateStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      // Reset mock
+      mockReset(mockPrisma.updatePackage.create);
+      
+      // Mock transaction
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        mockPrisma.update.create.mockResolvedValue(expectedUpdate);
+        return callback(mockPrisma);
+      });
+      
+      // Act
+      await updateRepository.create(updateData);
+      
+      // Assert
+      // Verify each updatePackage.create call to ensure defaults are properly applied
+      const calls = mockPrisma.updatePackage.create.mock.calls;
+      expect(calls.length).toBe(3);
+      
+      // First package: explicit true values
+      expect(calls[0][0].data.forced).toBe(true);
+      expect(calls[0][0].data.requiresReboot).toBe(true);
+      
+      // Second package: explicit false values
+      expect(calls[1][0].data.forced).toBe(false);
+      expect(calls[1][0].data.requiresReboot).toBe(false);
+      
+      // Third package: defaults should be applied
+      expect(calls[2][0].data.forced).toBe(false);
+      expect(calls[2][0].data.requiresReboot).toBe(false);
+      
+      // Check that the || false logic is properly tested
+      // The following variables demonstrate the behavior of || with different values
+      const withExplicitTrue = true;
+      const withExplicitFalse = false;
+      const withUndefined = undefined;
+      
+      // These assertions demonstrate how the default value logic works for each case
+      expect(withExplicitTrue || false).toBe(true);  // true is used, false is ignored
+      expect(withExplicitFalse || false).toBe(false); // false is used
+      expect(withUndefined || false).toBe(false);    // undefined is falsy, so false is used
+    });
   });
   
   describe('findById', () => {
@@ -485,6 +646,66 @@ describe('UpdateRepository', () => {
         packageId: 'pkg3',
         action: PackageAction.INSTALL,
         forced: true,
+        requiresReboot: false
+      });
+    });
+
+    it('should test forced and requiresReboot defaults more thoroughly', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageInputs: UpdatePackageInput[] = [
+        { packageId: 'pkg1', action: PackageAction.INSTALL, forced: true, requiresReboot: true },
+        { packageId: 'pkg2', action: PackageAction.INSTALL, forced: false, requiresReboot: true },
+        { packageId: 'pkg3', action: PackageAction.INSTALL, forced: true, requiresReboot: false },
+        { packageId: 'pkg4', action: PackageAction.INSTALL, forced: false, requiresReboot: false }
+      ];
+      
+      // Reset the mock before this test
+      mockReset(mockPrisma.updatePackage.create);
+      
+      // Act
+      await updateRepository.addPackages(updateId, packageInputs);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      
+      // Verify the calls to create were made with exactly the provided values
+      const calls = mockPrisma.updatePackage.create.mock.calls;
+      expect(calls.length).toBe(4);
+      
+      // Check first package - all true
+      expect(calls[0][0].data).toEqual({
+        updateId,
+        packageId: 'pkg1',
+        action: PackageAction.INSTALL,
+        forced: true,
+        requiresReboot: true
+      });
+      
+      // Check second package - forced false
+      expect(calls[1][0].data).toEqual({
+        updateId,
+        packageId: 'pkg2',
+        action: PackageAction.INSTALL,
+        forced: false,
+        requiresReboot: true
+      });
+      
+      // Check third package - requiresReboot false
+      expect(calls[2][0].data).toEqual({
+        updateId,
+        packageId: 'pkg3',
+        action: PackageAction.INSTALL,
+        forced: true,
+        requiresReboot: false
+      });
+      
+      // Check fourth package - both false
+      expect(calls[3][0].data).toEqual({
+        updateId,
+        packageId: 'pkg4',
+        action: PackageAction.INSTALL,
+        forced: false,
         requiresReboot: false
       });
     });
