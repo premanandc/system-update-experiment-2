@@ -198,6 +198,34 @@ describe('PackageRepository', () => {
     });
   });
   
+  describe('delete', () => {
+    it('should delete a package', async () => {
+      // Arrange
+      const packageId = '1';
+      const expectedPackage: Package = {
+        id: packageId,
+        name: 'nginx',
+        version: '1.21.0',
+        vendor: 'Nginx Inc.',
+        description: 'High-performance HTTP server',
+        status: PackageStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      mockPrisma.package.delete.mockResolvedValue(expectedPackage);
+      
+      // Act
+      const result = await packageRepository.delete(packageId);
+      
+      // Assert
+      expect(mockPrisma.package.delete).toHaveBeenCalledWith({
+        where: { id: packageId },
+      });
+      expect(result).toEqual(expectedPackage);
+    });
+  });
+  
   describe('status change methods', () => {
     it('should publish a package', async () => {
       // Arrange
