@@ -161,6 +161,64 @@ describe('UpdateRepository', () => {
     });
   });
   
+  describe('findAll', () => {
+    it('should return all updates', async () => {
+      // Arrange
+      const expectedUpdates: Update[] = [
+        {
+          id: '1',
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DRAFT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '2',
+          name: 'Quarterly Feature Update',
+          version: 'v2.0.0',
+          description: 'New features for Q2',
+          status: UpdateStatus.PUBLISHED,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '3',
+          name: 'Emergency Hotfix',
+          version: 'v1.0.1',
+          description: 'Critical security fix',
+          status: UpdateStatus.COMPLETED,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      
+      mockPrisma.update.findMany.mockResolvedValue(expectedUpdates);
+      
+      // Act
+      const result = await updateRepository.findAll();
+      
+      // Assert
+      expect(mockPrisma.update.findMany).toHaveBeenCalledWith();
+      expect(result).toEqual(expectedUpdates);
+      expect(result.length).toBe(3);
+    });
+    
+    it('should return an empty array when no updates exist', async () => {
+      // Arrange
+      mockPrisma.update.findMany.mockResolvedValue([]);
+      
+      // Act
+      const result = await updateRepository.findAll();
+      
+      // Assert
+      expect(mockPrisma.update.findMany).toHaveBeenCalledWith();
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
+    });
+  });
+  
   describe('update', () => {
     it('should update an update', async () => {
       // Arrange
@@ -293,6 +351,68 @@ describe('UpdateRepository', () => {
       
       // Assert
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+  });
+  
+  describe('removePackage', () => {
+    it('should remove a package from an update', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageId = 'pkg1';
+      
+      // Act
+      await updateRepository.removePackage(updateId, packageId);
+      
+      // Assert
+      expect(mockPrisma.updatePackage.delete).toHaveBeenCalledWith({
+        where: {
+          updateId_packageId: {
+            updateId,
+            packageId,
+          },
+        },
+      });
+    });
+  });
+  
+  describe('removePackages', () => {
+    it('should remove multiple packages from an update', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageIds = ['pkg1', 'pkg2', 'pkg3'];
+      
+      // Act
+      await updateRepository.removePackages(updateId, packageIds);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      
+      // Check that each package deletion was called
+      for (const packageId of packageIds) {
+        expect(mockPrisma.updatePackage.delete).toHaveBeenCalledWith({
+          where: {
+            updateId_packageId: {
+              updateId,
+              packageId,
+            },
+          },
+        });
+      }
+      
+      expect(mockPrisma.updatePackage.delete).toHaveBeenCalledTimes(packageIds.length);
+    });
+    
+    it('should handle removing an empty array of packages', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageIds: string[] = [];
+      
+      // Act
+      await updateRepository.removePackages(updateId, packageIds);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(mockPrisma.updatePackage.delete).not.toHaveBeenCalled();
     });
   });
   
@@ -622,6 +742,200 @@ describe('UpdateRepository', () => {
         // Act & Assert
         await expect(updateRepository.testUpdate(updateId))
           .rejects.toThrow('Only published updates can be moved to testing');
+      });
+    });
+    
+    describe('deployUpdate', () => {
+      it('should move a testing update to deploying', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.TESTING,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        const deployingUpdate = {
+          ...existingUpdate,
+          status: UpdateStatus.DEPLOYING
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        mockPrisma.update.update.mockResolvedValue(deployingUpdate);
+        
+        // Act
+        const result = await updateRepository.deployUpdate(updateId);
+        
+        // Assert
+        expect(mockPrisma.update.update).toHaveBeenCalledWith({
+          where: { id: updateId },
+          data: { status: UpdateStatus.DEPLOYING }
+        });
+        expect(result.status).toBe(UpdateStatus.DEPLOYING);
+      });
+      
+      it('should throw error when deploying a non-testing update', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DRAFT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        
+        // Act & Assert
+        await expect(updateRepository.deployUpdate(updateId))
+          .rejects.toThrow('Only tested updates can be deployed');
+      });
+    });
+    
+    describe('completeUpdate', () => {
+      it('should mark a deploying update as completed', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DEPLOYING,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        const completedUpdate = {
+          ...existingUpdate,
+          status: UpdateStatus.COMPLETED
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        mockPrisma.update.update.mockResolvedValue(completedUpdate);
+        
+        // Act
+        const result = await updateRepository.completeUpdate(updateId);
+        
+        // Assert
+        expect(mockPrisma.update.update).toHaveBeenCalledWith({
+          where: { id: updateId },
+          data: { status: UpdateStatus.COMPLETED }
+        });
+        expect(result.status).toBe(UpdateStatus.COMPLETED);
+      });
+      
+      it('should throw error when completing a non-deploying update', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DRAFT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        
+        // Act & Assert
+        await expect(updateRepository.completeUpdate(updateId))
+          .rejects.toThrow('Only deploying updates can be marked as completed');
+      });
+    });
+    
+    describe('failUpdate', () => {
+      it('should mark a deploying update as failed', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DEPLOYING,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        const failedUpdate = {
+          ...existingUpdate,
+          status: UpdateStatus.FAILED
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        mockPrisma.update.update.mockResolvedValue(failedUpdate);
+        
+        // Act
+        const result = await updateRepository.failUpdate(updateId);
+        
+        // Assert
+        expect(mockPrisma.update.update).toHaveBeenCalledWith({
+          where: { id: updateId },
+          data: { status: UpdateStatus.FAILED }
+        });
+        expect(result.status).toBe(UpdateStatus.FAILED);
+      });
+      
+      it('should mark a testing update as failed', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.TESTING,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        const failedUpdate = {
+          ...existingUpdate,
+          status: UpdateStatus.FAILED
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        mockPrisma.update.update.mockResolvedValue(failedUpdate);
+        
+        // Act
+        const result = await updateRepository.failUpdate(updateId);
+        
+        // Assert
+        expect(mockPrisma.update.update).toHaveBeenCalledWith({
+          where: { id: updateId },
+          data: { status: UpdateStatus.FAILED }
+        });
+        expect(result.status).toBe(UpdateStatus.FAILED);
+      });
+      
+      it('should throw error when failing a non-deploying update', async () => {
+        // Arrange
+        const updateId = '1';
+        const existingUpdate: Update = {
+          id: updateId,
+          name: 'Monthly Security Patch',
+          version: 'v1.0.0',
+          description: 'Security updates for July',
+          status: UpdateStatus.DRAFT,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        
+        mockPrisma.update.findUnique.mockResolvedValue(existingUpdate);
+        
+        // Act & Assert
+        await expect(updateRepository.failUpdate(updateId))
+          .rejects.toThrow('Only testing or deploying updates can be marked as failed');
       });
     });
     

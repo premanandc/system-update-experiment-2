@@ -4,6 +4,7 @@ import { PrismaPackageRepository } from '../models/package';
 import { PrismaUpdateRepository } from '../models/update';
 import { PrismaPlanRepository } from '../models/plan';
 import { PrismaBatchRepository } from '../models/batch';
+import { PrismaExecutionRepository } from '../models/execution';
 
 // Create a singleton PrismaClient instance
 const prisma = new PrismaClient();
@@ -14,6 +15,7 @@ const packageRepository = new PrismaPackageRepository(prisma);
 const updateRepository = new PrismaUpdateRepository(prisma);
 const planRepository = new PrismaPlanRepository(prisma);
 const batchRepository = new PrismaBatchRepository(prisma);
+const executionRepository = new PrismaExecutionRepository(prisma);
 
 export {
   prisma,           // Export the prisma client for direct access when needed
@@ -21,5 +23,6 @@ export {
   packageRepository,
   updateRepository,
   planRepository,
-  batchRepository
+  batchRepository,
+  executionRepository
 }; 

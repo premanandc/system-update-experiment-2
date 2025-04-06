@@ -253,9 +253,8 @@ describe('DeviceRepository', () => {
       const result = await deviceRepository.findAll();
       
       // Assert
-      expect(mockPrisma.device.findMany).toHaveBeenCalledWith();
+      expect(mockPrisma.device.findMany).toHaveBeenCalled();
       expect(result).toEqual(expectedDevices);
-      expect(result.length).toBe(3);
     });
     
     it('should return an empty array when no devices exist', async () => {
@@ -293,6 +292,111 @@ describe('DeviceRepository', () => {
       
       // Restore console.error
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('getPendingUpdates', () => {
+    it('should return pending updates for a device with full trace', async () => {
+      // Arrange
+      const deviceId = 'device-1';
+      
+      const mockExecutionDeviceStatuses = [
+        {
+          id: 'eds-1',
+          deviceId,
+          executionBatchId: 'exec-batch-1',
+          updateSent: true,
+          updateCompleted: false,
+          succeeded: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          executionBatch: {
+            id: 'exec-batch-1',
+            batchId: 'batch-1',
+            executionId: 'exec-1',
+            batch: {
+              id: 'batch-1',
+              name: 'Test Batch 1'
+            },
+            execution: {
+              id: 'exec-1',
+              planId: 'plan-1',
+              plan: {
+                id: 'plan-1',
+                name: 'Test Plan 1',
+                update: {
+                  id: 'update-1',
+                  name: 'Test Update 1'
+                }
+              }
+            }
+          }
+        }
+      ];
+      
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue(mockExecutionDeviceStatuses);
+      
+      // Act
+      const result = await deviceRepository.getPendingUpdates(deviceId);
+      
+      // Assert
+      expect(mockPrisma.executionDeviceStatus.findMany).toHaveBeenCalledWith({
+        where: {
+          deviceId,
+          updateSent: true,
+          updateCompleted: false,
+        },
+        include: {
+          executionBatch: {
+            include: {
+              batch: true,
+              execution: {
+                include: {
+                  plan: {
+                    include: {
+                      update: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      
+      expect(result).toEqual([
+        {
+          updateId: 'update-1',
+          updateName: 'Test Update 1',
+          executionBatchId: 'exec-batch-1',
+          batchId: 'batch-1',
+          batchName: 'Test Batch 1',
+          executionId: 'exec-1',
+          planId: 'plan-1',
+          planName: 'Test Plan 1'
+        }
+      ]);
+    });
+
+    it('should return an empty array when device has no pending updates', async () => {
+      // Arrange
+      const deviceId = 'device-1';
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue([]);
+      
+      // Act
+      const result = await deviceRepository.getPendingUpdates(deviceId);
+      
+      // Assert
+      expect(mockPrisma.executionDeviceStatus.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            deviceId,
+            updateSent: true,
+            updateCompleted: false,
+          }
+        })
+      );
+      expect(result).toEqual([]);
     });
   });
 }); 

@@ -27,6 +27,18 @@ export interface DeviceCreateInput {
   status?: DeviceStatus;
 }
 
+// Pending Update information
+export interface PendingUpdate {
+  updateId: string;
+  updateName: string;
+  executionBatchId: string;
+  batchId: string;
+  batchName: string;
+  executionId: string;
+  planId: string;
+  planName: string;
+}
+
 // Repository interface
 export interface DeviceRepository {
   create(data: DeviceCreateInput): Promise<Device>;
@@ -36,6 +48,7 @@ export interface DeviceRepository {
   update(id: string, data: Partial<DeviceCreateInput>): Promise<Device>;
   delete(id: string): Promise<Device>;
   setStatus(id: string, status: DeviceStatus): Promise<Device>;
+  getPendingUpdates(deviceId: string): Promise<PendingUpdate[]>;
 }
 
 // Prisma implementation of DeviceRepository
@@ -91,5 +104,42 @@ export class PrismaDeviceRepository implements DeviceRepository {
       where: { id },
       data: { status },
     }) as unknown as Device;
+  }
+
+  async getPendingUpdates(deviceId: string): Promise<PendingUpdate[]> {
+    const pendingUpdates = await this.prisma.executionDeviceStatus.findMany({
+      where: {
+        deviceId,
+        updateSent: true,
+        updateCompleted: false,
+      },
+      include: {
+        executionBatch: {
+          include: {
+            batch: true,
+            execution: {
+              include: {
+                plan: {
+                  include: {
+                    update: true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return pendingUpdates.map((status: any) => ({
+      updateId: status.executionBatch.execution.plan.update.id,
+      updateName: status.executionBatch.execution.plan.update.name,
+      executionBatchId: status.executionBatchId,
+      batchId: status.executionBatch.batchId,
+      batchName: status.executionBatch.batch.name,
+      executionId: status.executionBatch.executionId,
+      planId: status.executionBatch.execution.planId,
+      planName: status.executionBatch.execution.plan.name
+    }));
   }
 } 

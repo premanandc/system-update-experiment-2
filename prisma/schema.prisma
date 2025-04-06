@@ -14,16 +14,16 @@ datasource db {
 }
 
 model Device {
-  id                String              @id @default(uuid())
-  name              String
-  ipAddress         String?
-  type              String
-  status            DeviceStatus        @default(ONLINE)
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  installedPackages DevicePackage[]
-  batches           DeviceBatch[]
-  executions        Execution[]
+  id                  String                  @id @default(uuid())
+  name                String
+  ipAddress           String?
+  type                String
+  status              DeviceStatus            @default(ONLINE)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  installedPackages   DevicePackage[]
+  batches             DeviceBatch[]
+  executionDeviceStatus ExecutionDeviceStatus[]
 
   @@map("devices")
 }
@@ -72,14 +72,14 @@ model DevicePackage {
 }
 
 model Plan {
-  id          String      @id @default(uuid())
+  id          String       @id @default(uuid())
   name        String
   description String?
   updateId    String
-  status      PlanStatus  @default(DRAFT)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-  update      Update      @relation(fields: [updateId], references: [id])
+  status      PlanStatus   @default(DRAFT)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  update      Update       @relation(fields: [updateId], references: [id])
   batches     Batch[]
   executions  Execution[]
 
@@ -87,19 +87,19 @@ model Plan {
 }
 
 model Batch {
-  id              String       @id @default(uuid())
-  name            String
-  description     String?
-  planId          String
-  sequence        Int
-  type            BatchType    @default(MASS)
-  monitoringPeriod Int          @default(24) // Monitoring period in hours
-  status          BatchStatus  @default(PENDING)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  plan            Plan         @relation(fields: [planId], references: [id])
-  devices         DeviceBatch[]
-  executions      Execution[]
+  id                String              @id @default(uuid())
+  name              String
+  description       String?
+  planId            String
+  sequence          Int
+  type              BatchType           @default(MASS)
+  monitoringPeriod  Int                 @default(24) // Monitoring period in hours
+  status            BatchStatus         @default(PENDING)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  plan              Plan                @relation(fields: [planId], references: [id])
+  devices           DeviceBatch[]
+  executionBatches  ExecutionBatch[]
 
   @@map("batches")
 }
@@ -117,21 +117,48 @@ model DeviceBatch {
 }
 
 model Execution {
-  id          String          @id @default(uuid())
-  deviceId    String
-  planId      String
-  batchId     String?
-  status      ExecutionStatus @default(PENDING)
-  startedAt   DateTime?
-  completedAt DateTime?
-  logs        String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  device      Device          @relation(fields: [deviceId], references: [id])
-  plan        Plan            @relation(fields: [planId], references: [id])
-  batch       Batch?          @relation(fields: [batchId], references: [id])
+  id             String           @id @default(uuid())
+  planId         String
+  status         ExecutionStatus  @default(CREATED)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  plan           Plan             @relation(fields: [planId], references: [id])
+  batches        ExecutionBatch[]
 
   @@map("executions")
+}
+
+model ExecutionBatch {
+  id               String                  @id @default(uuid())
+  executionId      String
+  batchId          String
+  sequence         Int
+  status           ExecutionBatchStatus    @default(PENDING)
+  result           ExecutionBatchResult?
+  monitoringEndTime DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  execution        Execution               @relation(fields: [executionId], references: [id])
+  batch            Batch                   @relation(fields: [batchId], references: [id])
+  deviceStatuses   ExecutionDeviceStatus[]
+
+  @@map("execution_batches")
+}
+
+model ExecutionDeviceStatus {
+  id               String          @id @default(uuid())
+  executionBatchId String
+  deviceId         String
+  updateSent       Boolean         @default(false)
+  updateCompleted  Boolean         @default(false)
+  succeeded        Boolean?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  executionBatch   ExecutionBatch  @relation(fields: [executionBatchId], references: [id])
+  device           Device          @relation(fields: [deviceId], references: [id])
+
+  @@unique([executionBatchId, deviceId])
+  @@map("execution_device_statuses")
 }
 
 model UpdatePackage {
@@ -193,11 +220,22 @@ enum BatchStatus {
 }
 
 enum ExecutionStatus {
-  PENDING
-  IN_PROGRESS
+  CREATED
+  EXECUTING
   COMPLETED
+  ABANDONED
+}
+
+enum ExecutionBatchStatus {
+  PENDING
+  EXECUTING
+  COMPLETED
+}
+
+enum ExecutionBatchResult {
+  SUCCESSFUL
   FAILED
-  CANCELLED
+  INCOMPLETE
 }
 
 enum PackageAction {
