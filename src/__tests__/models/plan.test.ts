@@ -224,6 +224,73 @@ describe('PlanRepository', () => {
     });
   });
 
+  describe('rejectPlan', () => {
+    it('should reject a draft plan', async () => {
+      // Arrange
+      const planId = '1';
+      const existingPlan: Plan = {
+        id: planId,
+        name: 'Test Plan',
+        description: 'Test Description',
+        updateId: '1',
+        status: PlanStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      const rejectedPlan: Plan = {
+        ...existingPlan,
+        status: PlanStatus.REJECTED,
+      };
+      
+      mockPrisma.plan.findUnique.mockResolvedValue(existingPlan);
+      mockPrisma.plan.update.mockResolvedValue(rejectedPlan);
+      
+      // Act
+      const result = await planRepository.rejectPlan(planId);
+      
+      // Assert
+      expect(mockPrisma.plan.findUnique).toHaveBeenCalledWith({
+        where: { id: planId },
+      });
+      expect(mockPrisma.plan.update).toHaveBeenCalledWith({
+        where: { id: planId },
+        data: { status: PlanStatus.REJECTED },
+      });
+      expect(result).toEqual(rejectedPlan);
+    });
+    
+    it('should throw error when rejecting a non-draft plan', async () => {
+      // Arrange
+      const planId = '1';
+      const existingPlan: Plan = {
+        id: planId,
+        name: 'Test Plan',
+        description: 'Test Description',
+        updateId: '1',
+        status: PlanStatus.APPROVED, // Already approved
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      mockPrisma.plan.findUnique.mockResolvedValue(existingPlan);
+      
+      // Act & Assert
+      await expect(planRepository.rejectPlan(planId))
+        .rejects.toThrow('Only draft plans can be rejected');
+    });
+    
+    it('should throw error when rejecting a non-existent plan', async () => {
+      // Arrange
+      const planId = 'nonexistent';
+      mockPrisma.plan.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(planRepository.rejectPlan(planId))
+        .rejects.toThrow('Plan not found');
+    });
+  });
+
   describe('getAffectedDevices', () => {
     it('should identify devices affected by an update', async () => {
       // Arrange
@@ -295,6 +362,265 @@ describe('PlanRepository', () => {
       expect(result.some(d => d.id === 'dev1')).toBe(true); // No package installed
       expect(result.some(d => d.id === 'dev2')).toBe(true); // Older version installed
       expect(result.some(d => d.id === 'dev3')).toBe(false); // Up-to-date
+    });
+
+    it('should identify devices affected by a forced update', async () => {
+      // Arrange
+      const updateId = '1';
+      const updatePackages = [
+        {
+          package: {
+            id: 'pkg1',
+            name: 'nginx',
+            version: '1.21.0'
+          },
+          action: 'INSTALL',
+          forced: true // Forced installation
+        }
+      ];
+      
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0',
+        packages: updatePackages
+      };
+      
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          installedPackages: []
+        },
+        {
+          id: 'dev2',
+          name: 'Server 2',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.21.0' // Same version
+              }
+            }
+          ]
+        }
+      ];
+      
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      mockPrisma.device.findMany.mockResolvedValue(devices as any);
+      
+      // Act
+      const result = await planRepository.getAffectedDevices(updateId);
+      
+      // Assert
+      expect(result.length).toBe(2); // Both should be affected due to forced installation
+      expect(result.some(d => d.id === 'dev1')).toBe(true);
+      expect(result.some(d => d.id === 'dev2')).toBe(true);
+    });
+
+    it('should identify devices affected by an uninstall action', async () => {
+      // Arrange
+      const updateId = '1';
+      const updatePackages = [
+        {
+          package: {
+            id: 'pkg1',
+            name: 'nginx',
+            version: '1.21.0'
+          },
+          action: 'UNINSTALL',
+          forced: false
+        }
+      ];
+      
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0',
+        packages: updatePackages
+      };
+      
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          installedPackages: []
+        },
+        {
+          id: 'dev2',
+          name: 'Server 2',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.21.0'
+              }
+            }
+          ]
+        }
+      ];
+      
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      mockPrisma.device.findMany.mockResolvedValue(devices as any);
+      
+      // Act
+      const result = await planRepository.getAffectedDevices(updateId);
+      
+      // Assert
+      expect(result.length).toBe(1); // Only dev2 should be affected
+      expect(result.some(d => d.id === 'dev1')).toBe(false); // No package to uninstall
+      expect(result.some(d => d.id === 'dev2')).toBe(true); // Has package to uninstall
+    });
+
+    it('should return empty array for updates with no packages', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Empty Update',
+        version: '1.0.0',
+        packages: [] // No packages
+      };
+      
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Act
+      const result = await planRepository.getAffectedDevices(updateId);
+      
+      // Assert
+      expect(result.length).toBe(0);
+      expect(mockPrisma.device.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should throw error for a non-existent update', async () => {
+      // Arrange
+      const updateId = 'nonexistent';
+      mockPrisma.update.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(planRepository.getAffectedDevices(updateId))
+        .rejects.toThrow('Update not found');
+    });
+  });
+
+  // To test the private compareVersions method, we'll need to test it indirectly
+  // through getAffectedDevices with different versions
+  describe('version comparison', () => {
+    it('should correctly identify devices with older versions as affected', async () => {
+      // Arrange
+      const updateId = '1';
+      const updatePackages = [
+        {
+          package: {
+            id: 'pkg1',
+            name: 'nginx',
+            version: '1.21.5'
+          },
+          action: 'INSTALL',
+          forced: false
+        }
+      ];
+      
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0',
+        packages: updatePackages
+      };
+      
+      // Create devices with different versions to test various version comparison scenarios
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.21.0' // Older - affected
+              }
+            }
+          ]
+        },
+        {
+          id: 'dev2',
+          name: 'Server 2',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.21.5' // Same - not affected
+              }
+            }
+          ]
+        },
+        {
+          id: 'dev3',
+          name: 'Server 3',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.21.10' // Newer - not affected
+              }
+            }
+          ]
+        },
+        {
+          id: 'dev4',
+          name: 'Server 4',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '1.9.0' // Older major version - affected
+              }
+            }
+          ]
+        },
+        {
+          id: 'dev5',
+          name: 'Server 5',
+          status: 'ONLINE',
+          installedPackages: [
+            {
+              package: {
+                id: 'pkg1',
+                name: 'nginx',
+                version: '2.0.0' // Newer major version - not affected
+              }
+            }
+          ]
+        }
+      ];
+      
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      mockPrisma.device.findMany.mockResolvedValue(devices as any);
+      
+      // Act
+      const result = await planRepository.getAffectedDevices(updateId);
+      
+      // Assert
+      expect(result.length).toBe(2);
+      expect(result.some(d => d.id === 'dev1')).toBe(true); // Older minor version
+      expect(result.some(d => d.id === 'dev2')).toBe(false); // Same version
+      expect(result.some(d => d.id === 'dev3')).toBe(false); // Newer minor version
+      expect(result.some(d => d.id === 'dev4')).toBe(true); // Older major version
+      expect(result.some(d => d.id === 'dev5')).toBe(false); // Newer major version
     });
   });
 }); 
