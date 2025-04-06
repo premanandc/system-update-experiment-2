@@ -94,6 +94,58 @@ describe('UpdateRepository', () => {
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(result).toEqual(expectedUpdate);
     });
+    
+    it('should create a new update with packages using default values for missing optional parameters', async () => {
+      // Arrange
+      const updateData: UpdateCreateInput = {
+        name: 'Update with Default Values',
+        version: 'v1.0.0',
+        description: 'Testing default values',
+        packages: [
+          { 
+            packageId: 'pkg1'
+            // action, forced, requiresReboot are omitted
+          }
+        ]
+      };
+      
+      const expectedUpdate: Update = {
+        id: '1',
+        name: 'Update with Default Values',
+        version: 'v1.0.0',
+        description: 'Testing default values',
+        status: UpdateStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      
+      // Reset mocks
+      mockReset(mockPrisma.update.create);
+      mockReset(mockPrisma.updatePackage.create);
+      
+      // We need to setup the transaction to mock the create calls
+      mockPrisma.$transaction.mockImplementation(async (callback: any) => {
+        mockPrisma.update.create.mockResolvedValue(expectedUpdate);
+        return callback(mockPrisma);
+      });
+      
+      // Act
+      const result = await updateRepository.create(updateData);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      expect(result).toEqual(expectedUpdate);
+      
+      // Verify package creation with default values
+      const call = mockPrisma.updatePackage.create.mock.calls[0][0];
+      expect(call.data).toEqual({
+        updateId: '1',
+        packageId: 'pkg1',
+        action: PackageAction.INSTALL,  // default
+        forced: false,                  // default
+        requiresReboot: false           // default
+      });
+    });
   });
   
   describe('findById', () => {
@@ -303,6 +355,29 @@ describe('UpdateRepository', () => {
       });
     });
     
+    it('should use default values when optional parameters are omitted', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageInput: UpdatePackageInput = {
+        packageId: 'pkg1'
+        // action, forced, and requiresReboot are intentionally omitted
+      };
+      
+      // Act
+      await updateRepository.addPackage(updateId, packageInput);
+      
+      // Assert
+      expect(mockPrisma.updatePackage.create).toHaveBeenCalledWith({
+        data: {
+          updateId,
+          packageId: 'pkg1',
+          action: PackageAction.INSTALL,  // default
+          forced: false,                  // default
+          requiresReboot: false           // default
+        }
+      });
+    });
+    
     it('should update package options', async () => {
       // Arrange
       const updateId = '1';
@@ -351,6 +426,67 @@ describe('UpdateRepository', () => {
       
       // Assert
       expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+    
+    it('should use default values when some packages have missing optional parameters', async () => {
+      // Arrange
+      const updateId = '1';
+      const packageInputs: UpdatePackageInput[] = [
+        {
+          packageId: 'pkg1'
+          // No optional parameters provided
+        },
+        {
+          packageId: 'pkg2',
+          action: PackageAction.UNINSTALL
+          // forced and requiresReboot are omitted
+        },
+        {
+          packageId: 'pkg3',
+          forced: true
+          // action and requiresReboot are omitted
+        }
+      ];
+      
+      // Reset the mock before this test
+      mockReset(mockPrisma.updatePackage.create);
+      
+      // Act
+      await updateRepository.addPackages(updateId, packageInputs);
+      
+      // Assert
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+      
+      // Verify the calls to create were made with the right data
+      const calls = mockPrisma.updatePackage.create.mock.calls;
+      expect(calls.length).toBe(3);
+      
+      // Check first package (all defaults)
+      expect(calls[0][0].data).toEqual({
+        updateId,
+        packageId: 'pkg1',
+        action: PackageAction.INSTALL,
+        forced: false,
+        requiresReboot: false
+      });
+      
+      // Check second package (action provided, other defaults)
+      expect(calls[1][0].data).toEqual({
+        updateId,
+        packageId: 'pkg2',
+        action: PackageAction.UNINSTALL,
+        forced: false,
+        requiresReboot: false
+      });
+      
+      // Check third package (forced provided, other defaults)
+      expect(calls[2][0].data).toEqual({
+        updateId,
+        packageId: 'pkg3',
+        action: PackageAction.INSTALL,
+        forced: true,
+        requiresReboot: false
+      });
     });
   });
   
