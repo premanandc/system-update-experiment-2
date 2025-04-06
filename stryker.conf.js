@@ -6,7 +6,13 @@ module.exports = {
   reporters: ['html', 'clear-text', 'progress'],
   testRunner: 'jest',
   coverageAnalysis: 'perTest',
-  mutate: ['src/models/package.ts'],
+  mutate: [
+    'src/models/package.ts',
+    'src/models/update.ts',
+    'src/models/device.ts',
+    'src/models/batch.ts',
+    'src/models/plan.ts'
+  ],
   timeoutMS: 60000,
   concurrency: 4,
   ignorePatterns: ['node_modules', 'dist', 'coverage'],

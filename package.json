@@ -7,6 +7,11 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:mutation": "stryker run",
+    "test:mutation:package": "stryker run --mutate 'src/models/package.ts'",
+    "test:mutation:update": "stryker run --mutate 'src/models/update.ts'",
+    "test:mutation:device": "stryker run --mutate 'src/models/device.ts'",
+    "test:mutation:batch": "stryker run --mutate 'src/models/batch.ts'",
+    "test:mutation:plan": "stryker run --mutate 'src/models/plan.ts'",
     "build": "tsc"
   },
   "keywords": [],
