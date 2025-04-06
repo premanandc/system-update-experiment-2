@@ -825,6 +825,16 @@ describe('UpdateRepository', () => {
         await expect(updateRepository.publishUpdate(updateId))
           .rejects.toThrow('Cannot publish an update without packages');
       });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.publishUpdate(updateId))
+          .rejects.toThrow('Update not found');
+      });
     });
     
     describe('testUpdate', () => {
@@ -878,6 +888,16 @@ describe('UpdateRepository', () => {
         // Act & Assert
         await expect(updateRepository.testUpdate(updateId))
           .rejects.toThrow('Only published updates can be moved to testing');
+      });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.testUpdate(updateId))
+          .rejects.toThrow('Update not found');
       });
     });
     
@@ -933,6 +953,16 @@ describe('UpdateRepository', () => {
         await expect(updateRepository.deployUpdate(updateId))
           .rejects.toThrow('Only tested updates can be deployed');
       });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.deployUpdate(updateId))
+          .rejects.toThrow('Update not found');
+      });
     });
     
     describe('completeUpdate', () => {
@@ -986,6 +1016,16 @@ describe('UpdateRepository', () => {
         // Act & Assert
         await expect(updateRepository.completeUpdate(updateId))
           .rejects.toThrow('Only deploying updates can be marked as completed');
+      });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.completeUpdate(updateId))
+          .rejects.toThrow('Update not found');
       });
     });
     
@@ -1073,6 +1113,16 @@ describe('UpdateRepository', () => {
         await expect(updateRepository.failUpdate(updateId))
           .rejects.toThrow('Only testing or deploying updates can be marked as failed');
       });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.failUpdate(updateId))
+          .rejects.toThrow('Update not found');
+      });
     });
     
     describe('cancelUpdate', () => {
@@ -1124,6 +1174,16 @@ describe('UpdateRepository', () => {
         // Act & Assert
         await expect(updateRepository.cancelUpdate(updateId))
           .rejects.toThrow('Only draft, published, or testing updates can be cancelled');
+      });
+      
+      it('should throw error when update is not found', async () => {
+        // Arrange
+        const updateId = 'non-existent';
+        mockPrisma.update.findUnique.mockResolvedValue(null);
+        
+        // Act & Assert
+        await expect(updateRepository.cancelUpdate(updateId))
+          .rejects.toThrow('Update not found');
       });
     });
   });

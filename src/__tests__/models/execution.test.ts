@@ -495,6 +495,24 @@ describe('ExecutionRepository', () => {
         result: null,
       });
     });
+
+    it('should handle case with no device statuses', async () => {
+      // Arrange
+      const executionBatchId = 'exec-batch-1';
+      
+      // Mock empty device statuses array
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue([]);
+
+      // Act
+      const result = await executionRepo.checkBatchCompletion(executionBatchId);
+
+      // Assert
+      expect(mockPrisma.executionBatch.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        isComplete: false,
+        result: null,
+      });
+    });
   });
   
   describe('endMonitoringPeriod', () => {
@@ -557,6 +575,30 @@ describe('ExecutionRepository', () => {
         id: executionBatchId,
         status: ExecutionBatchStatus.EXECUTING,
         monitoringEndTime: new Date(Date.now() + 1000000), // End time is in the future
+      };
+      mockPrisma.executionBatch.findUnique.mockResolvedValue(mockExecutionBatch);
+      
+      // Act
+      const result = await executionRepo.endMonitoringPeriod(executionBatchId);
+
+      // Assert
+      expect(mockPrisma.executionBatch.update).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        batchComplete: false,
+        result: null,
+        devicesReported: 0,
+        totalDevices: 0,
+      });
+    });
+
+    it('should not mark a batch as complete if monitoring period is null', async () => {
+      // Arrange
+      const executionBatchId = 'exec-batch-1';
+      
+      const mockExecutionBatch = {
+        id: executionBatchId,
+        status: ExecutionBatchStatus.EXECUTING,
+        monitoringEndTime: null, // Null monitoring end time
       };
       mockPrisma.executionBatch.findUnique.mockResolvedValue(mockExecutionBatch);
       
@@ -719,6 +761,18 @@ describe('ExecutionRepository', () => {
       });
       expect(result).toBeTruthy();
     });
+
+    it('should handle error when execution update fails', async () => {
+      // Arrange
+      const executionId = 'exec-123';
+      const error = new Error('Database error');
+      
+      mockPrisma.execution.update.mockRejectedValue(error);
+      
+      // Act & Assert
+      await expect(executionRepo.completeExecution(executionId))
+        .rejects.toThrow('Database error');
+    });
   });
   
   describe('abandonExecution', () => {
@@ -740,6 +794,18 @@ describe('ExecutionRepository', () => {
         data: { status: ExecutionStatus.ABANDONED },
       });
       expect(result).toBeTruthy();
+    });
+
+    it('should handle error when execution update fails', async () => {
+      // Arrange
+      const executionId = 'exec-123';
+      const error = new Error('Database error');
+      
+      mockPrisma.execution.update.mockRejectedValue(error);
+      
+      // Act & Assert
+      await expect(executionRepo.abandonExecution(executionId))
+        .rejects.toThrow('Database error');
     });
   });
 }); 
