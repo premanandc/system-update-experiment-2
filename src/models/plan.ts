@@ -69,6 +69,7 @@ export interface PlanRepository {
   rejectPlan(id: string): Promise<Plan>;
   getBatches(planId: string): Promise<PlanBatch[]>;
   getAffectedDevices(updateId: string): Promise<Device[]>;
+  generatePlan(updateId: string, deviceIds?: string[]): Promise<Plan>;
 }
 
 // Prisma implementation of PlanRepository
@@ -253,5 +254,97 @@ export class PrismaPlanRepository implements PlanRepository {
     }
     
     return 0; // Versions are equal
+  }
+
+  async generatePlan(updateId: string, deviceIds?: string[]): Promise<Plan> {
+    // 1. Get the update to make sure it exists
+    const update = await this.prisma.update.findUnique({
+      where: { id: updateId },
+    });
+
+    if (!update) {
+      throw new Error('Update not found');
+    }
+
+    // 2. Get affected devices
+    let affectedDevices = await this.getAffectedDevices(updateId);
+
+    // 3. If deviceIds is provided, filter to only include those devices
+    if (deviceIds && deviceIds.length > 0) {
+      affectedDevices = affectedDevices.filter(device => 
+        deviceIds.includes(device.id)
+      );
+    }
+
+    // 4. If no affected devices, throw an error
+    if (affectedDevices.length === 0) {
+      throw new Error('No affected devices found for this update');
+    }
+
+    // 5. Create the plan
+    const planName = `Plan for ${update.name} v${update.version}`;
+    const plan = await this.create({
+      name: planName,
+      description: `Automatically generated plan for update ${update.name} v${update.version}`,
+      updateId: updateId,
+    });
+
+    // 6. Create batches based on the number of devices
+    const totalDevices = affectedDevices.length;
+    
+    if (totalDevices === 1) {
+      // For a single device, create one mass batch
+      await this.createBatch(plan.id, 'Mass Batch', affectedDevices, 1, BatchType.MASS);
+    } else if (totalDevices < 5) {
+      // For 2-4 devices, create one test batch and one mass batch
+      const testDevices = [affectedDevices[0]];
+      const massDevices = affectedDevices.slice(1);
+      
+      await this.createBatch(plan.id, 'Test Batch', testDevices, 1, BatchType.TEST);
+      await this.createBatch(plan.id, 'Mass Batch', massDevices, 2, BatchType.MASS);
+    } else {
+      // For 5+ devices, create two test batches and one mass batch
+      const testBatch1 = [affectedDevices[0]];
+      const testBatch2 = [affectedDevices[1]];
+      const massDevices = affectedDevices.slice(2);
+      
+      await this.createBatch(plan.id, 'Test Batch 1', testBatch1, 1, BatchType.TEST);
+      await this.createBatch(plan.id, 'Test Batch 2', testBatch2, 2, BatchType.TEST);
+      await this.createBatch(plan.id, 'Mass Batch', massDevices, 3, BatchType.MASS);
+    }
+
+    return plan;
+  }
+
+  // Helper method to create a batch with devices
+  private async createBatch(
+    planId: string, 
+    name: string, 
+    devices: Device[], 
+    sequence: number, 
+    type: BatchType,
+    monitoringPeriod: number = 24 // Default 24 hour monitoring
+  ): Promise<void> {
+    // Create the batch
+    const batch = await this.prisma.batch.create({
+      data: {
+        name,
+        description: `Mass batch with ${devices.length} device${devices.length !== 1 ? 's' : ''}`,
+        planId,
+        sequence,
+        type,
+        monitoringPeriod,
+      },
+    });
+    
+    // Add devices to the batch
+    for (const device of devices) {
+      await this.prisma.deviceBatch.create({
+        data: {
+          deviceId: device.id,
+          batchId: batch.id,
+        },
+      });
+    }
   }
 } 

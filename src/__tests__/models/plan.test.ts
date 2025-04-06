@@ -623,4 +623,470 @@ describe('PlanRepository', () => {
       expect(result.some(d => d.id === 'dev5')).toBe(false); // Newer major version
     });
   });
+
+  describe('generatePlan', () => {
+    it('should generate a plan with appropriate batches for a single device', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0'
+      };
+      
+      // Mock a single affected device
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.1',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      // Mock plan creation
+      const createdPlan = {
+        id: 'plan1',
+        name: 'Plan for Security Update v1.0.0',
+        description: 'Automatically generated plan for update Security Update v1.0.0',
+        updateId,
+        status: PlanStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Mock batch creation
+      const massBatch = {
+        id: 'batch1',
+        name: 'Mass Batch',
+        description: 'Mass batch with 1 device',
+        planId: 'plan1',
+        sequence: 1,
+        type: BatchType.MASS,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Set up mocks
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Mock getAffectedDevices without actually implementing it yet
+      jest.spyOn(planRepository, 'getAffectedDevices').mockResolvedValue(devices as any);
+      
+      mockPrisma.plan.create.mockResolvedValue(createdPlan as any);
+      mockPrisma.batch.create.mockResolvedValue(massBatch as any);
+      mockPrisma.deviceBatch.create.mockResolvedValue({ id: 'db1', deviceId: 'dev1', batchId: 'batch1' } as any);
+      
+      // Act
+      const result = await planRepository.generatePlan(updateId);
+      
+      // Assert
+      expect(result).toEqual(createdPlan);
+      expect(planRepository.getAffectedDevices).toHaveBeenCalledWith(updateId);
+      expect(mockPrisma.plan.create).toHaveBeenCalledWith({
+        data: {
+          name: 'Plan for Security Update v1.0.0',
+          description: 'Automatically generated plan for update Security Update v1.0.0',
+          updateId
+        }
+      });
+      expect(mockPrisma.batch.create).toHaveBeenCalledWith({
+        data: {
+          name: 'Mass Batch',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 1,
+          type: BatchType.MASS,
+          monitoringPeriod: 24
+        }
+      });
+    });
+
+    it('should generate a plan with test and mass batches for multiple devices', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0'
+      };
+      
+      // Mock four affected devices
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.1',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'dev2',
+          name: 'Server 2',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.2',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'dev3',
+          name: 'Server 3',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.3',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'dev4',
+          name: 'Server 4',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.4',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      // Mock plan creation
+      const createdPlan = {
+        id: 'plan1',
+        name: 'Plan for Security Update v1.0.0',
+        description: 'Automatically generated plan for update Security Update v1.0.0',
+        updateId,
+        status: PlanStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Mock batch creation
+      const testBatch = {
+        id: 'batch1',
+        name: 'Test Batch',
+        description: 'Mass batch with 1 device',
+        planId: 'plan1',
+        sequence: 1,
+        type: BatchType.TEST,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const massBatch = {
+        id: 'batch2',
+        name: 'Mass Batch',
+        description: 'Mass batch with 3 devices',
+        planId: 'plan1',
+        sequence: 2,
+        type: BatchType.MASS,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Set up mocks
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Mock getAffectedDevices
+      jest.spyOn(planRepository, 'getAffectedDevices').mockResolvedValue(devices as any);
+      
+      mockPrisma.plan.create.mockResolvedValue(createdPlan as any);
+      
+      // Mock batch creation - first create test batch, then mass batch
+      mockPrisma.batch.create.mockResolvedValueOnce(testBatch as any);
+      mockPrisma.batch.create.mockResolvedValueOnce(massBatch as any);
+      
+      // Mock device-batch associations
+      mockPrisma.deviceBatch.create.mockResolvedValue({ id: 'db1' } as any);
+      
+      // Act
+      const result = await planRepository.generatePlan(updateId);
+      
+      // Assert
+      expect(result).toEqual(createdPlan);
+      expect(mockPrisma.batch.create).toHaveBeenCalledTimes(2);
+      
+      // Check first call for test batch
+      expect(mockPrisma.batch.create.mock.calls[0][0]).toEqual({
+        data: {
+          name: 'Test Batch',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 1,
+          type: BatchType.TEST,
+          monitoringPeriod: 24
+        }
+      });
+      
+      // Check second call for mass batch
+      expect(mockPrisma.batch.create.mock.calls[1][0]).toEqual({
+        data: {
+          name: 'Mass Batch',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 2,
+          type: BatchType.MASS,
+          monitoringPeriod: 24
+        }
+      });
+      
+      // Expect deviceBatch create to be called 4 times (once per device)
+      expect(mockPrisma.deviceBatch.create).toHaveBeenCalledTimes(4);
+    });
+
+    it('should generate a plan with multiple test batches and mass batch for many devices', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0'
+      };
+      
+      // Mock six affected devices
+      const devices = Array.from({ length: 6 }, (_, i) => ({
+        id: `dev${i+1}`,
+        name: `Server ${i+1}`,
+        status: 'ONLINE',
+        type: 'PRODUCTION',
+        ipAddress: `192.168.1.${i+1}`,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+      
+      // Mock plan creation
+      const createdPlan = {
+        id: 'plan1',
+        name: 'Plan for Security Update v1.0.0',
+        description: 'Automatically generated plan for update Security Update v1.0.0',
+        updateId,
+        status: PlanStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Mock batch creation
+      const testBatch1 = {
+        id: 'batch1',
+        name: 'Test Batch 1',
+        description: 'Mass batch with 1 device',
+        planId: 'plan1',
+        sequence: 1,
+        type: BatchType.TEST,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const testBatch2 = {
+        id: 'batch2',
+        name: 'Test Batch 2',
+        description: 'Mass batch with 1 device',
+        planId: 'plan1',
+        sequence: 2,
+        type: BatchType.TEST,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      const massBatch = {
+        id: 'batch3',
+        name: 'Mass Batch',
+        description: 'Mass batch with 4 devices',
+        planId: 'plan1',
+        sequence: 3,
+        type: BatchType.MASS,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Set up mocks
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Mock getAffectedDevices
+      jest.spyOn(planRepository, 'getAffectedDevices').mockResolvedValue(devices as any);
+      
+      mockPrisma.plan.create.mockResolvedValue(createdPlan as any);
+      
+      // Mock batch creation
+      mockPrisma.batch.create.mockResolvedValueOnce(testBatch1 as any);
+      mockPrisma.batch.create.mockResolvedValueOnce(testBatch2 as any);
+      mockPrisma.batch.create.mockResolvedValueOnce(massBatch as any);
+      
+      // Mock device-batch associations
+      mockPrisma.deviceBatch.create.mockResolvedValue({ id: 'db1' } as any);
+      
+      // Act
+      const result = await planRepository.generatePlan(updateId);
+      
+      // Assert
+      expect(result).toEqual(createdPlan);
+      expect(mockPrisma.batch.create).toHaveBeenCalledTimes(3);
+      
+      // Check first call for test batch 1
+      expect(mockPrisma.batch.create.mock.calls[0][0]).toEqual({
+        data: {
+          name: 'Test Batch 1',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 1,
+          type: BatchType.TEST,
+          monitoringPeriod: 24
+        }
+      });
+      
+      // Check second call for test batch 2
+      expect(mockPrisma.batch.create.mock.calls[1][0]).toEqual({
+        data: {
+          name: 'Test Batch 2',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 2,
+          type: BatchType.TEST,
+          monitoringPeriod: 24
+        }
+      });
+      
+      // Check third call for mass batch
+      expect(mockPrisma.batch.create.mock.calls[2][0]).toEqual({
+        data: {
+          name: 'Mass Batch',
+          description: expect.stringContaining('Mass batch with'),
+          planId: 'plan1',
+          sequence: 3,
+          type: BatchType.MASS,
+          monitoringPeriod: 24
+        }
+      });
+      
+      // Expect deviceBatch create to be called 6 times (once per device)
+      expect(mockPrisma.deviceBatch.create).toHaveBeenCalledTimes(6);
+    });
+
+    it('should throw error for non-existent update', async () => {
+      // Arrange
+      const updateId = 'nonexistent';
+      mockPrisma.update.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(planRepository.generatePlan(updateId))
+        .rejects.toThrow('Update not found');
+    });
+
+    it('should throw error when no affected devices are found', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0'
+      };
+      
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Mock getAffectedDevices to return empty array
+      jest.spyOn(planRepository, 'getAffectedDevices').mockResolvedValue([]);
+      
+      // Act & Assert
+      await expect(planRepository.generatePlan(updateId))
+        .rejects.toThrow('No affected devices found for this update');
+    });
+
+    it('should filter devices when deviceIds are provided', async () => {
+      // Arrange
+      const updateId = '1';
+      const update = {
+        id: updateId,
+        name: 'Security Update',
+        version: '1.0.0'
+      };
+      
+      // Mock affected devices
+      const devices = [
+        {
+          id: 'dev1',
+          name: 'Server 1',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.1',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        },
+        {
+          id: 'dev2',
+          name: 'Server 2',
+          status: 'ONLINE',
+          type: 'PRODUCTION',
+          ipAddress: '192.168.1.2',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      
+      // Mock plan creation
+      const createdPlan = {
+        id: 'plan1',
+        name: 'Plan for Security Update v1.0.0',
+        description: 'Automatically generated plan for update Security Update v1.0.0',
+        updateId,
+        status: PlanStatus.DRAFT,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Mock batch creation
+      const massBatch = {
+        id: 'batch1',
+        name: 'Mass Batch',
+        description: 'Mass batch with 1 device',
+        planId: 'plan1',
+        sequence: 1,
+        type: BatchType.MASS,
+        monitoringPeriod: 24,
+        status: BatchStatus.PENDING,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Set up mocks
+      mockPrisma.update.findUnique.mockResolvedValue(update as any);
+      
+      // Mock getAffectedDevices
+      jest.spyOn(planRepository, 'getAffectedDevices').mockResolvedValue(devices as any);
+      
+      mockPrisma.plan.create.mockResolvedValue(createdPlan as any);
+      mockPrisma.batch.create.mockResolvedValue(massBatch as any);
+      mockPrisma.deviceBatch.create.mockResolvedValue({ id: 'db1' } as any);
+      
+      // Act
+      // Only include device with ID 'dev1'
+      const result = await planRepository.generatePlan(updateId, ['dev1']);
+      
+      // Assert
+      expect(result).toEqual(createdPlan);
+      expect(mockPrisma.batch.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.deviceBatch.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.deviceBatch.create).toHaveBeenCalledWith({
+        data: {
+          deviceId: 'dev1',
+          batchId: massBatch.id
+        }
+      });
+    });
+  });
 }); 
