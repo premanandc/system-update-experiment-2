@@ -111,9 +111,9 @@ export class PrismaUpdateRepository implements UpdateRepository {
             data: {
               updateId: update.id,
               packageId: pkg.packageId,
-              action: pkg.action || undefined,
-              forced: pkg.forced || undefined,
-              requiresReboot: pkg.requiresReboot || undefined,
+              action: pkg.action || PackageAction.INSTALL,
+              forced: pkg.forced || false,
+              requiresReboot: pkg.requiresReboot || false,
             },
           });
         }
@@ -162,9 +162,9 @@ export class PrismaUpdateRepository implements UpdateRepository {
       data: {
         updateId,
         packageId: packageInput.packageId,
-        action: packageInput.action || undefined,
-        forced: packageInput.forced || undefined,
-        requiresReboot: packageInput.requiresReboot || undefined,
+        action: packageInput.action || PackageAction.INSTALL,
+        forced: packageInput.forced || false,
+        requiresReboot: packageInput.requiresReboot || false,
       },
     });
   }
@@ -176,9 +176,9 @@ export class PrismaUpdateRepository implements UpdateRepository {
           data: {
             updateId,
             packageId: pkg.packageId,
-            action: pkg.action || undefined,
-            forced: pkg.forced || undefined,
-            requiresReboot: pkg.requiresReboot || undefined,
+            action: pkg.action || PackageAction.INSTALL,
+            forced: pkg.forced || false,
+            requiresReboot: pkg.requiresReboot || false,
           },
         })
       )
