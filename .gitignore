@@ -1,3 +1,36 @@
-node_modules
-# Keep environment variables out of version control
+# Dependency directories
+node_modules/
+
+# Generated Prisma client
+.prisma/
+
+# Database files
+prisma/dev.db
+prisma/dev.db-journal
+
+# Environment variables
 .env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
