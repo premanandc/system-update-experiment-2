@@ -87,17 +87,19 @@ model Plan {
 }
 
 model Batch {
-  id          String       @id @default(uuid())
-  name        String
-  description String?
-  planId      String
-  sequence    Int
-  status      BatchStatus  @default(PENDING)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  plan        Plan         @relation(fields: [planId], references: [id])
-  devices     DeviceBatch[]
-  executions  Execution[]
+  id              String       @id @default(uuid())
+  name            String
+  description     String?
+  planId          String
+  sequence        Int
+  type            BatchType    @default(MASS)
+  monitoringPeriod Int          @default(24) // Monitoring period in hours
+  status          BatchStatus  @default(PENDING)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  plan            Plan         @relation(fields: [planId], references: [id])
+  devices         DeviceBatch[]
+  executions      Execution[]
 
   @@map("batches")
 }
@@ -173,6 +175,8 @@ enum UpdateStatus {
 
 enum PlanStatus {
   DRAFT
+  APPROVED
+  REJECTED
   READY
   EXECUTING
   COMPLETED
@@ -199,4 +203,9 @@ enum ExecutionStatus {
 enum PackageAction {
   INSTALL
   UNINSTALL
+}
+
+enum BatchType {
+  TEST
+  MASS
 }

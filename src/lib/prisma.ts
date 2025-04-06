@@ -2,14 +2,24 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaDeviceRepository } from '../models/device';
 import { PrismaPackageRepository } from '../models/package';
 import { PrismaUpdateRepository } from '../models/update';
+import { PrismaPlanRepository } from '../models/plan';
+import { PrismaBatchRepository } from '../models/batch';
 
-// Create singleton instance of Prisma Client
+// Create a singleton PrismaClient instance
 const prisma = new PrismaClient();
 
-// Create repository instances
-export const deviceRepository = new PrismaDeviceRepository(prisma);
-export const packageRepository = new PrismaPackageRepository(prisma);
-export const updateRepository = new PrismaUpdateRepository(prisma);
+// Create singleton repository instances
+const deviceRepository = new PrismaDeviceRepository(prisma);
+const packageRepository = new PrismaPackageRepository(prisma);
+const updateRepository = new PrismaUpdateRepository(prisma);
+const planRepository = new PrismaPlanRepository(prisma);
+const batchRepository = new PrismaBatchRepository(prisma);
 
-// Export the prisma client for direct usage when needed
-export default prisma; 
+export {
+  prisma,           // Export the prisma client for direct access when needed
+  deviceRepository,
+  packageRepository,
+  updateRepository,
+  planRepository,
+  batchRepository
+}; 
