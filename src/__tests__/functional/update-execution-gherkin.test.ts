@@ -140,14 +140,21 @@ describe('Update Execution Workflow', () => {
       await when_an_update_plan_is_generated();
       expect(context.plan).not.toBeNull();
       
-      // Get the batches for the plan
-      context.batches = await planRepository.getBatches(context.plan.id);
+      // Get the batches for the plan using batchRepository
+      const batches = await batchRepository.findByPlanId(context.plan.id);
+      context.batches = batches;
       
       // Verify the batch structure (2 test + 1 mass)
       expect(context.batches.length).toBe(3);
       expect(context.batches[0].type).toBe(BatchType.TEST);
       expect(context.batches[1].type).toBe(BatchType.TEST);
       expect(context.batches[2].type).toBe(BatchType.MASS);
+      
+      // Verify the first test batch using batchRepository.findById
+      const firstBatch = await batchRepository.findById(context.batches[0].id);
+      expect(firstBatch).not.toBeNull();
+      expect(firstBatch?.name).toContain('Test Batch');
+      expect(firstBatch?.sequence).toBe(1);
       
       // Approve the plan
       await when_the_plan_is_approved();
@@ -278,6 +285,20 @@ describe('Update Execution Workflow', () => {
       // Update the current execution batch ID
       context.executionBatchId = startNextResult!.executionBatchId;
       
+      // Get the batch info using executionBatch data
+      const executionBatch = await prisma.executionBatch.findUnique({
+        where: { id: context.executionBatchId },
+      });
+      
+      // Use batchRepository to get batch details
+      const batchDetails = await batchRepository.findById(executionBatch!.batchId);
+      expect(batchDetails).not.toBeNull();
+      expect(batchDetails?.sequence).toBe(context.currentBatchIndex + 1);
+      
+      // Use batchRepository to get devices in the batch
+      const batchDevices = await batchRepository.getDevices(executionBatch!.batchId);
+      expect(batchDevices.length).toBeGreaterThan(0);
+      
       // Get devices in this batch
       const deviceStatuses = await prisma.executionDeviceStatus.findMany({
         where: { executionBatchId: context.executionBatchId },
@@ -329,7 +350,7 @@ describe('Update Execution Workflow', () => {
         context.allDevicesInBatch = deviceStatuses.map((status: any) => status.deviceId);
         
         // Complete all devices in this batch
-        if (context.allDevicesInBatch.length > 0) {
+        if (context.allDevicesInBatch && context.allDevicesInBatch.length > 0) {
           await then_all_devices_in_batch_report_success();
           
           // Check batch completion
@@ -339,6 +360,20 @@ describe('Update Execution Workflow', () => {
           
           expect(batchCompletionResult.isComplete).toBe(true);
         }
+      }
+      
+      // Verify all batches are completed using batchRepository
+      for (const batch of context.batches || []) {
+        // Get the execution batch for this batch
+        const executionBatch = await prisma.executionBatch.findFirst({
+          where: { 
+            executionId: context.execution.id,
+            batchId: batch.id
+          }
+        });
+        
+        expect(executionBatch).not.toBeNull();
+        expect(executionBatch?.status).toBe(ExecutionBatchStatus.COMPLETED);
       }
       
       // Check if all batches are completed
