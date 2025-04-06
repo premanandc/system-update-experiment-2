@@ -59,7 +59,12 @@ export class PrismaDeviceRepository implements DeviceRepository {
   }
 
   async findAll(): Promise<Device[]> {
-    return this.prisma.device.findMany() as unknown as Device[];
+    try {
+      return this.prisma.device.findMany() as unknown as Device[];
+    } catch (error) {
+      console.error('Error fetching all devices:', error);
+      return [];
+    }
   }
 
   async findByStatus(status: DeviceStatus): Promise<Device[]> {

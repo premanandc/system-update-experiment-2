@@ -213,4 +213,86 @@ describe('DeviceRepository', () => {
       expect(result).toEqual(expectedDevice);
     });
   });
+
+  describe('findAll', () => {
+    it('should return all devices', async () => {
+      // Arrange
+      const expectedDevices: Device[] = [
+        {
+          id: '1',
+          name: 'Device 1',
+          ipAddress: '192.168.1.1',
+          type: 'SERVER',
+          status: DeviceStatus.ONLINE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '2',
+          name: 'Device 2',
+          ipAddress: '192.168.1.2',
+          type: 'WORKSTATION',
+          status: DeviceStatus.OFFLINE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: '3',
+          name: 'Device 3',
+          ipAddress: '192.168.1.3',
+          type: 'SERVER',
+          status: DeviceStatus.MAINTENANCE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ];
+      
+      mockPrisma.device.findMany.mockResolvedValue(expectedDevices);
+      
+      // Act
+      const result = await deviceRepository.findAll();
+      
+      // Assert
+      expect(mockPrisma.device.findMany).toHaveBeenCalledWith();
+      expect(result).toEqual(expectedDevices);
+      expect(result.length).toBe(3);
+    });
+    
+    it('should return an empty array when no devices exist', async () => {
+      // Arrange
+      mockPrisma.device.findMany.mockResolvedValue([]);
+      
+      // Act
+      const result = await deviceRepository.findAll();
+      
+      // Assert
+      expect(mockPrisma.device.findMany).toHaveBeenCalledWith();
+      expect(result).toEqual([]);
+      expect(result.length).toBe(0);
+    });
+    
+    it('should return an empty array and log error when an exception occurs', async () => {
+      // Arrange
+      mockPrisma.device.findMany.mockImplementation(() => {
+        throw new Error('Database connection failed');
+      });
+      
+      // Spy on console.error
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      
+      // Act
+      const result = await deviceRepository.findAll();
+      
+      // Assert
+      expect(mockPrisma.device.findMany).toHaveBeenCalledWith();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        'Error fetching all devices:',
+        expect.objectContaining({ message: 'Database connection failed' })
+      );
+      expect(result).toEqual([]);
+      
+      // Restore console.error
+      consoleSpy.mockRestore();
+    });
+  });
 }); 
