@@ -52,6 +52,8 @@ type TestContext = {
   executionBatchId?: string;
   testDeviceId?: string;
   otherDeviceId?: string;
+  allDevicesInBatch?: string[];
+  currentBatchIndex: number;
 };
 
 const context: TestContext = {
@@ -60,6 +62,7 @@ const context: TestContext = {
   updates: [],
   plans: [],
   executions: [],
+  currentBatchIndex: 0,
 };
 
 describe('Update Execution Workflow', () => {
@@ -199,6 +202,9 @@ describe('Update Execution Workflow', () => {
         context.otherDeviceId = deviceStatuses[1].deviceId;
       }
       
+      // Store all devices in this batch
+      context.allDevicesInBatch = deviceStatuses.map((status: any) => status.deviceId);
+      
       // Simulate device reporting back success
       await then_a_device_reports_update_success();
       
@@ -214,6 +220,154 @@ describe('Update Execution Workflow', () => {
       
       expect(updatedDeviceStatus?.updateCompleted).toBe(true);
       expect(updatedDeviceStatus?.succeeded).toBe(true);
+    });
+
+    /**
+     * And all devices in the batch complete successfully
+     */
+    test('AND all devices in the batch complete successfully', async () => {
+      if (!context.allDevicesInBatch || context.allDevicesInBatch.length === 0) {
+        console.log('No devices in batch, skipping this test');
+        return;
+      }
+      
+      // Update all remaining devices to report success
+      await then_all_devices_in_batch_report_success();
+      
+      // Check if batch is completed
+      const batchCompletionResult = await executionRepository.checkBatchCompletion(
+        context.executionBatchId!
+      );
+      
+      expect(batchCompletionResult.isComplete).toBe(true);
+      expect(batchCompletionResult.result).toBe('SUCCESSFUL');
+      
+      // Verify batch is now marked as completed
+      const executionBatch = await prisma.executionBatch.findUnique({
+        where: { id: context.executionBatchId! },
+      });
+      
+      expect(executionBatch?.status).toBe(ExecutionBatchStatus.COMPLETED);
+      expect(executionBatch?.result).toBe('SUCCESSFUL');
+    });
+    
+    /**
+     * And the next batch is started and completed
+     */
+    test('AND the next batch is started and completed', async () => {
+      context.currentBatchIndex++;
+      
+      // Get all batches for this execution
+      const allBatches = await prisma.executionBatch.findMany({
+        where: { executionId: context.execution.id },
+        orderBy: { sequence: 'asc' },
+      });
+      
+      if (context.currentBatchIndex >= allBatches.length) {
+        console.log('No more batches to execute, skipping this test');
+        return;
+      }
+      
+      // Start the next batch
+      const startNextResult = await executionRepository.startNextBatch(
+        context.executionBatchId!
+      );
+      
+      expect(startNextResult).not.toBeNull();
+      
+      // Update the current execution batch ID
+      context.executionBatchId = startNextResult!.executionBatchId;
+      
+      // Get devices in this batch
+      const deviceStatuses = await prisma.executionDeviceStatus.findMany({
+        where: { executionBatchId: context.executionBatchId },
+      });
+      
+      context.allDevicesInBatch = deviceStatuses.map((status: any) => status.deviceId);
+      
+      // Complete all devices in this batch
+      await then_all_devices_in_batch_report_success();
+      
+      // Check batch completion
+      const batchCompletionResult = await executionRepository.checkBatchCompletion(
+        context.executionBatchId!
+      );
+      
+      expect(batchCompletionResult.isComplete).toBe(true);
+    });
+    
+    /**
+     * And all remaining batches are completed
+     */
+    test('AND all remaining batches are completed', async () => {
+      // Get all batches for this execution
+      const allBatches = await prisma.executionBatch.findMany({
+        where: { executionId: context.execution.id },
+        orderBy: { sequence: 'asc' },
+      });
+      
+      // Process each remaining batch
+      for (let i = context.currentBatchIndex + 1; i < allBatches.length; i++) {
+        // Start the next batch
+        const startNextResult = await executionRepository.startNextBatch(
+          context.executionBatchId!
+        );
+        
+        if (!startNextResult) {
+          console.log(`No more batches to start after batch ${i-1}`);
+          break;
+        }
+        
+        // Update current batch ID
+        context.executionBatchId = startNextResult.executionBatchId;
+        
+        // Get devices in this batch
+        const deviceStatuses = await prisma.executionDeviceStatus.findMany({
+          where: { executionBatchId: context.executionBatchId },
+        });
+        
+        context.allDevicesInBatch = deviceStatuses.map((status: any) => status.deviceId);
+        
+        // Complete all devices in this batch
+        if (context.allDevicesInBatch.length > 0) {
+          await then_all_devices_in_batch_report_success();
+          
+          // Check batch completion
+          const batchCompletionResult = await executionRepository.checkBatchCompletion(
+            context.executionBatchId!
+          );
+          
+          expect(batchCompletionResult.isComplete).toBe(true);
+        }
+      }
+      
+      // Check if all batches are completed
+      const pendingBatches = await prisma.executionBatch.findMany({
+        where: { 
+          executionId: context.execution.id,
+          status: { not: ExecutionBatchStatus.COMPLETED },
+        },
+      });
+      
+      expect(pendingBatches.length).toBe(0);
+    });
+    
+    /**
+     * And the execution is completed successfully
+     */
+    test('AND the execution is completed successfully', async () => {
+      // Complete the execution
+      const result = await executionRepository.completeExecution(context.execution.id);
+      expect(result).toBe(true);
+      
+      // Verify execution status
+      const executionDetails = await prisma.execution.findUnique({
+        where: { id: context.execution.id },
+      });
+      
+      expect(executionDetails?.status).toBe(ExecutionStatus.COMPLETED);
+      
+      console.log('Full execution workflow completed successfully');
     });
 
     /**
@@ -398,6 +552,25 @@ async function then_a_device_reports_update_success() {
   );
 }
 
+async function then_all_devices_in_batch_report_success() {
+  // Skip the first device as it's already been processed
+  if (!context.allDevicesInBatch) {
+    console.log('No devices found in batch');
+    return;
+  }
+  
+  const devicesToUpdate = context.allDevicesInBatch.filter(id => id !== context.testDeviceId);
+  
+  // Have each device report success
+  for (const deviceId of devicesToUpdate) {
+    await executionRepository.recordDeviceUpdateResult(
+      context.execution.id,
+      deviceId,
+      true // Success
+    );
+  }
+}
+
 // Helper functions
 async function findPackageByName(name: string) {
   const packages = await packageRepository.findAll();
@@ -453,6 +626,8 @@ async function cleanup() {
     context.executionBatchId = undefined;
     context.testDeviceId = undefined;
     context.otherDeviceId = undefined;
+    context.allDevicesInBatch = undefined;
+    context.currentBatchIndex = 0;
     
     console.log('Cleanup completed');
   } catch (error) {
