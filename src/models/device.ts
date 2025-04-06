@@ -8,14 +8,8 @@ export enum DeviceStatus {
   DECOMMISSIONED = 'DECOMMISSIONED'
 }
 
-export interface DeviceCreateInput {
-  name: string;
-  ipAddress?: string;
-  type: string;
-  status?: DeviceStatus;
-}
-
-export interface PrismaDevice {
+// Domain entity
+export interface Device {
   id: string;
   name: string;
   ipAddress: string | null;
@@ -25,52 +19,72 @@ export interface PrismaDevice {
   updatedAt: Date;
 }
 
-export class Device {
+// Input data for creating a device
+export interface DeviceCreateInput {
+  name: string;
+  ipAddress?: string;
+  type: string;
+  status?: DeviceStatus;
+}
+
+// Repository interface
+export interface DeviceRepository {
+  create(data: DeviceCreateInput): Promise<Device>;
+  findById(id: string): Promise<Device | null>;
+  findAll(): Promise<Device[]>;
+  findByStatus(status: DeviceStatus): Promise<Device[]>;
+  update(id: string, data: Partial<DeviceCreateInput>): Promise<Device>;
+  delete(id: string): Promise<Device>;
+  setStatus(id: string, status: DeviceStatus): Promise<Device>;
+}
+
+// Prisma implementation of DeviceRepository
+export class PrismaDeviceRepository implements DeviceRepository {
   private prisma: PrismaClient;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
   }
 
-  async create(data: DeviceCreateInput): Promise<PrismaDevice> {
+  async create(data: DeviceCreateInput): Promise<Device> {
     return this.prisma.device.create({
       data,
-    }) as Promise<PrismaDevice>;
+    }) as unknown as Device;
   }
 
-  async findById(id: string): Promise<PrismaDevice | null> {
+  async findById(id: string): Promise<Device | null> {
     return this.prisma.device.findUnique({
       where: { id },
-    }) as Promise<PrismaDevice | null>;
+    }) as unknown as (Device | null);
   }
 
-  async findAll(): Promise<PrismaDevice[]> {
-    return this.prisma.device.findMany() as Promise<PrismaDevice[]>;
+  async findAll(): Promise<Device[]> {
+    return this.prisma.device.findMany() as unknown as Device[];
   }
 
-  async findByStatus(status: DeviceStatus): Promise<PrismaDevice[]> {
+  async findByStatus(status: DeviceStatus): Promise<Device[]> {
     return this.prisma.device.findMany({
       where: { status },
-    }) as Promise<PrismaDevice[]>;
+    }) as unknown as Device[];
   }
 
-  async update(id: string, data: Partial<DeviceCreateInput>): Promise<PrismaDevice> {
+  async update(id: string, data: Partial<DeviceCreateInput>): Promise<Device> {
     return this.prisma.device.update({
       where: { id },
       data,
-    }) as Promise<PrismaDevice>;
+    }) as unknown as Device;
   }
 
-  async delete(id: string): Promise<PrismaDevice> {
+  async delete(id: string): Promise<Device> {
     return this.prisma.device.delete({
       where: { id },
-    }) as Promise<PrismaDevice>;
+    }) as unknown as Device;
   }
 
-  async setStatus(id: string, status: DeviceStatus): Promise<PrismaDevice> {
+  async setStatus(id: string, status: DeviceStatus): Promise<Device> {
     return this.prisma.device.update({
       where: { id },
       data: { status },
-    }) as Promise<PrismaDevice>;
+    }) as unknown as Device;
   }
 } 

@@ -1,19 +1,19 @@
 import { PrismaClient } from '@prisma/client';
-import { Package, PackageCreateInput, PackageStatus } from '../../models/package';
+import { Package, PackageCreateInput, PackageStatus, PrismaPackageRepository } from '../../models/package';
 import { mockDeep, mockReset } from 'jest-mock-extended';
 
 // Mock PrismaClient
 const mockPrisma = mockDeep<PrismaClient>();
 
-// Create an instance of the Package class with the mocked PrismaClient
-const packageModel = new Package(mockPrisma);
+// Create an instance of the PackageRepository with the mocked PrismaClient
+const packageRepository = new PrismaPackageRepository(mockPrisma);
 
 // Reset mocks before each test
 beforeEach(() => {
   mockReset(mockPrisma);
 });
 
-describe('Package Model', () => {
+describe('PackageRepository', () => {
   describe('create', () => {
     it('should create a new package', async () => {
       // Arrange
@@ -24,7 +24,7 @@ describe('Package Model', () => {
         description: 'High-performance HTTP server',
       };
       
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: '1',
         name: 'nginx',
         version: '1.21.0',
@@ -38,7 +38,7 @@ describe('Package Model', () => {
       mockPrisma.package.create.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.create(packageData);
+      const result = await packageRepository.create(packageData);
       
       // Assert
       expect(mockPrisma.package.create).toHaveBeenCalledWith({
@@ -52,7 +52,7 @@ describe('Package Model', () => {
     it('should find a package by its ID', async () => {
       // Arrange
       const packageId = '1';
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: packageId,
         name: 'nginx',
         version: '1.21.0',
@@ -66,7 +66,7 @@ describe('Package Model', () => {
       mockPrisma.package.findUnique.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.findById(packageId);
+      const result = await packageRepository.findById(packageId);
       
       // Assert
       expect(mockPrisma.package.findUnique).toHaveBeenCalledWith({
@@ -81,7 +81,7 @@ describe('Package Model', () => {
       mockPrisma.package.findUnique.mockResolvedValue(null);
       
       // Act
-      const result = await packageModel.findById(packageId);
+      const result = await packageRepository.findById(packageId);
       
       // Assert
       expect(mockPrisma.package.findUnique).toHaveBeenCalledWith({
@@ -96,7 +96,7 @@ describe('Package Model', () => {
       // Arrange
       const name = 'nginx';
       const version = '1.21.0';
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: '1',
         name: 'nginx',
         version: '1.21.0',
@@ -110,7 +110,7 @@ describe('Package Model', () => {
       mockPrisma.package.findUnique.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.findByNameAndVersion(name, version);
+      const result = await packageRepository.findByNameAndVersion(name, version);
       
       // Assert
       expect(mockPrisma.package.findUnique).toHaveBeenCalledWith({
@@ -129,7 +129,7 @@ describe('Package Model', () => {
     it('should find packages by status', async () => {
       // Arrange
       const status = PackageStatus.PUBLISHED;
-      const expectedPackages = [
+      const expectedPackages: Package[] = [
         {
           id: '1',
           name: 'nginx',
@@ -155,7 +155,7 @@ describe('Package Model', () => {
       mockPrisma.package.findMany.mockResolvedValue(expectedPackages);
       
       // Act
-      const result = await packageModel.findByStatus(status);
+      const result = await packageRepository.findByStatus(status);
       
       // Assert
       expect(mockPrisma.package.findMany).toHaveBeenCalledWith({
@@ -173,7 +173,7 @@ describe('Package Model', () => {
         description: 'Updated description',
         vendor: 'Updated vendor',
       };
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: packageId,
         name: 'nginx',
         version: '1.21.0',
@@ -187,7 +187,7 @@ describe('Package Model', () => {
       mockPrisma.package.update.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.update(packageId, updateData);
+      const result = await packageRepository.update(packageId, updateData);
       
       // Assert
       expect(mockPrisma.package.update).toHaveBeenCalledWith({
@@ -202,7 +202,7 @@ describe('Package Model', () => {
     it('should publish a package', async () => {
       // Arrange
       const packageId = '1';
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: packageId,
         name: 'nginx',
         version: '1.21.0',
@@ -216,7 +216,7 @@ describe('Package Model', () => {
       mockPrisma.package.update.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.publishPackage(packageId);
+      const result = await packageRepository.publishPackage(packageId);
       
       // Assert
       expect(mockPrisma.package.update).toHaveBeenCalledWith({
@@ -229,7 +229,7 @@ describe('Package Model', () => {
     it('should deprecate a package', async () => {
       // Arrange
       const packageId = '1';
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: packageId,
         name: 'nginx',
         version: '1.21.0',
@@ -243,7 +243,7 @@ describe('Package Model', () => {
       mockPrisma.package.update.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.deprecatePackage(packageId);
+      const result = await packageRepository.deprecatePackage(packageId);
       
       // Assert
       expect(mockPrisma.package.update).toHaveBeenCalledWith({
@@ -256,7 +256,7 @@ describe('Package Model', () => {
     it('should archive a package', async () => {
       // Arrange
       const packageId = '1';
-      const expectedPackage = {
+      const expectedPackage: Package = {
         id: packageId,
         name: 'nginx',
         version: '1.21.0',
@@ -270,7 +270,7 @@ describe('Package Model', () => {
       mockPrisma.package.update.mockResolvedValue(expectedPackage);
       
       // Act
-      const result = await packageModel.archivePackage(packageId);
+      const result = await packageRepository.archivePackage(packageId);
       
       // Assert
       expect(mockPrisma.package.update).toHaveBeenCalledWith({

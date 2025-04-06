@@ -1,19 +1,19 @@
 import { PrismaClient } from '@prisma/client';
-import { Device, DeviceCreateInput, DeviceStatus } from '../../models/device';
+import { Device, DeviceCreateInput, DeviceStatus, PrismaDeviceRepository } from '../../models/device';
 import { mockDeep, mockReset } from 'jest-mock-extended';
 
 // Mock PrismaClient
 const mockPrisma = mockDeep<PrismaClient>();
 
-// Create an instance of the Device class with the mocked PrismaClient
-const deviceModel = new Device(mockPrisma);
+// Create an instance of the DeviceRepository with the mocked PrismaClient
+const deviceRepository = new PrismaDeviceRepository(mockPrisma);
 
 // Reset mocks before each test
 beforeEach(() => {
   mockReset(mockPrisma);
 });
 
-describe('Device Model', () => {
+describe('DeviceRepository', () => {
   describe('create', () => {
     it('should create a new device', async () => {
       // Arrange
@@ -23,7 +23,7 @@ describe('Device Model', () => {
         type: 'SERVER',
       };
       
-      const expectedDevice = {
+      const expectedDevice: Device = {
         id: '1',
         name: 'Test Device',
         ipAddress: '192.168.1.1',
@@ -36,7 +36,7 @@ describe('Device Model', () => {
       mockPrisma.device.create.mockResolvedValue(expectedDevice);
       
       // Act
-      const result = await deviceModel.create(deviceData);
+      const result = await deviceRepository.create(deviceData);
       
       // Assert
       expect(mockPrisma.device.create).toHaveBeenCalledWith({
@@ -50,7 +50,7 @@ describe('Device Model', () => {
     it('should find a device by its ID', async () => {
       // Arrange
       const deviceId = '1';
-      const expectedDevice = {
+      const expectedDevice: Device = {
         id: deviceId,
         name: 'Test Device',
         ipAddress: '192.168.1.1',
@@ -63,7 +63,7 @@ describe('Device Model', () => {
       mockPrisma.device.findUnique.mockResolvedValue(expectedDevice);
       
       // Act
-      const result = await deviceModel.findById(deviceId);
+      const result = await deviceRepository.findById(deviceId);
       
       // Assert
       expect(mockPrisma.device.findUnique).toHaveBeenCalledWith({
@@ -78,7 +78,7 @@ describe('Device Model', () => {
       mockPrisma.device.findUnique.mockResolvedValue(null);
       
       // Act
-      const result = await deviceModel.findById(deviceId);
+      const result = await deviceRepository.findById(deviceId);
       
       // Assert
       expect(mockPrisma.device.findUnique).toHaveBeenCalledWith({
@@ -92,7 +92,7 @@ describe('Device Model', () => {
     it('should find devices by status', async () => {
       // Arrange
       const status = DeviceStatus.ONLINE;
-      const expectedDevices = [
+      const expectedDevices: Device[] = [
         {
           id: '1',
           name: 'Device 1',
@@ -116,7 +116,7 @@ describe('Device Model', () => {
       mockPrisma.device.findMany.mockResolvedValue(expectedDevices);
       
       // Act
-      const result = await deviceModel.findByStatus(status);
+      const result = await deviceRepository.findByStatus(status);
       
       // Assert
       expect(mockPrisma.device.findMany).toHaveBeenCalledWith({
@@ -134,7 +134,7 @@ describe('Device Model', () => {
         name: 'Updated Device',
         ipAddress: '192.168.1.100',
       };
-      const expectedDevice = {
+      const expectedDevice: Device = {
         id: deviceId,
         name: 'Updated Device',
         ipAddress: '192.168.1.100',
@@ -147,7 +147,7 @@ describe('Device Model', () => {
       mockPrisma.device.update.mockResolvedValue(expectedDevice);
       
       // Act
-      const result = await deviceModel.update(deviceId, updateData);
+      const result = await deviceRepository.update(deviceId, updateData);
       
       // Assert
       expect(mockPrisma.device.update).toHaveBeenCalledWith({
@@ -163,7 +163,7 @@ describe('Device Model', () => {
       // Arrange
       const deviceId = '1';
       const status = DeviceStatus.MAINTENANCE;
-      const expectedDevice = {
+      const expectedDevice: Device = {
         id: deviceId,
         name: 'Test Device',
         ipAddress: '192.168.1.1',
@@ -176,7 +176,7 @@ describe('Device Model', () => {
       mockPrisma.device.update.mockResolvedValue(expectedDevice);
       
       // Act
-      const result = await deviceModel.setStatus(deviceId, status);
+      const result = await deviceRepository.setStatus(deviceId, status);
       
       // Assert
       expect(mockPrisma.device.update).toHaveBeenCalledWith({
@@ -191,7 +191,7 @@ describe('Device Model', () => {
     it('should delete a device', async () => {
       // Arrange
       const deviceId = '1';
-      const expectedDevice = {
+      const expectedDevice: Device = {
         id: deviceId,
         name: 'Test Device',
         ipAddress: '192.168.1.1',
@@ -204,7 +204,7 @@ describe('Device Model', () => {
       mockPrisma.device.delete.mockResolvedValue(expectedDevice);
       
       // Act
-      const result = await deviceModel.delete(deviceId);
+      const result = await deviceRepository.delete(deviceId);
       
       // Assert
       expect(mockPrisma.device.delete).toHaveBeenCalledWith({

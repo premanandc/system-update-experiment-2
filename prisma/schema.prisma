@@ -133,12 +133,15 @@ model Execution {
 }
 
 model UpdatePackage {
-  id        String   @id @default(uuid())
-  updateId  String
-  packageId String
-  createdAt DateTime @default(now())
-  update    Update   @relation(fields: [updateId], references: [id])
-  package   Package  @relation(fields: [packageId], references: [id])
+  id             String           @id @default(uuid())
+  updateId       String
+  packageId      String
+  action         PackageAction    @default(INSTALL)
+  forced         Boolean          @default(false)
+  requiresReboot Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  update         Update           @relation(fields: [updateId], references: [id])
+  package        Package          @relation(fields: [packageId], references: [id])
 
   @@unique([updateId, packageId])
   @@map("update_packages")
@@ -191,4 +194,9 @@ enum ExecutionStatus {
   COMPLETED
   FAILED
   CANCELLED
+}
+
+enum PackageAction {
+  INSTALL
+  UNINSTALL
 }

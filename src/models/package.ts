@@ -8,15 +8,8 @@ export enum PackageStatus {
   ARCHIVED = 'ARCHIVED'
 }
 
-export interface PackageCreateInput {
-  name: string;
-  version: string;
-  vendor?: string;
-  description?: string;
-  status?: PackageStatus;
-}
-
-export interface PrismaPackage {
+// Domain entity
+export interface Package {
   id: string;
   name: string;
   version: string;
@@ -27,26 +20,51 @@ export interface PrismaPackage {
   updatedAt: Date;
 }
 
-export class Package {
+// Input data for creating a package
+export interface PackageCreateInput {
+  name: string;
+  version: string;
+  vendor?: string;
+  description?: string;
+  status?: PackageStatus;
+}
+
+// Repository interface
+export interface PackageRepository {
+  create(data: PackageCreateInput): Promise<Package>;
+  findById(id: string): Promise<Package | null>;
+  findByNameAndVersion(name: string, version: string): Promise<Package | null>;
+  findAll(): Promise<Package[]>;
+  findByStatus(status: PackageStatus): Promise<Package[]>;
+  update(id: string, data: Partial<PackageCreateInput>): Promise<Package>;
+  delete(id: string): Promise<Package>;
+  setStatus(id: string, status: PackageStatus): Promise<Package>;
+  publishPackage(id: string): Promise<Package>;
+  deprecatePackage(id: string): Promise<Package>;
+  archivePackage(id: string): Promise<Package>;
+}
+
+// Prisma implementation of PackageRepository
+export class PrismaPackageRepository implements PackageRepository {
   private prisma: PrismaClient;
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
   }
 
-  async create(data: PackageCreateInput): Promise<PrismaPackage> {
+  async create(data: PackageCreateInput): Promise<Package> {
     return this.prisma.package.create({
       data,
-    }) as Promise<PrismaPackage>;
+    }) as unknown as Package;
   }
 
-  async findById(id: string): Promise<PrismaPackage | null> {
+  async findById(id: string): Promise<Package | null> {
     return this.prisma.package.findUnique({
       where: { id },
-    }) as Promise<PrismaPackage | null>;
+    }) as unknown as (Package | null);
   }
 
-  async findByNameAndVersion(name: string, version: string): Promise<PrismaPackage | null> {
+  async findByNameAndVersion(name: string, version: string): Promise<Package | null> {
     return this.prisma.package.findUnique({
       where: {
         name_version: {
@@ -54,48 +72,48 @@ export class Package {
           version
         }
       }
-    }) as Promise<PrismaPackage | null>;
+    }) as unknown as (Package | null);
   }
 
-  async findAll(): Promise<PrismaPackage[]> {
-    return this.prisma.package.findMany() as Promise<PrismaPackage[]>;
+  async findAll(): Promise<Package[]> {
+    return this.prisma.package.findMany() as unknown as Package[];
   }
 
-  async findByStatus(status: PackageStatus): Promise<PrismaPackage[]> {
+  async findByStatus(status: PackageStatus): Promise<Package[]> {
     return this.prisma.package.findMany({
       where: { status },
-    }) as Promise<PrismaPackage[]>;
+    }) as unknown as Package[];
   }
 
-  async update(id: string, data: Partial<PackageCreateInput>): Promise<PrismaPackage> {
+  async update(id: string, data: Partial<PackageCreateInput>): Promise<Package> {
     return this.prisma.package.update({
       where: { id },
       data,
-    }) as Promise<PrismaPackage>;
+    }) as unknown as Package;
   }
 
-  async delete(id: string): Promise<PrismaPackage> {
+  async delete(id: string): Promise<Package> {
     return this.prisma.package.delete({
       where: { id },
-    }) as Promise<PrismaPackage>;
+    }) as unknown as Package;
   }
 
-  async setStatus(id: string, status: PackageStatus): Promise<PrismaPackage> {
+  async setStatus(id: string, status: PackageStatus): Promise<Package> {
     return this.prisma.package.update({
       where: { id },
       data: { status },
-    }) as Promise<PrismaPackage>;
+    }) as unknown as Package;
   }
 
-  async publishPackage(id: string): Promise<PrismaPackage> {
+  async publishPackage(id: string): Promise<Package> {
     return this.setStatus(id, PackageStatus.PUBLISHED);
   }
 
-  async deprecatePackage(id: string): Promise<PrismaPackage> {
+  async deprecatePackage(id: string): Promise<Package> {
     return this.setStatus(id, PackageStatus.DEPRECATED);
   }
 
-  async archivePackage(id: string): Promise<PrismaPackage> {
+  async archivePackage(id: string): Promise<Package> {
     return this.setStatus(id, PackageStatus.ARCHIVED);
   }
 } 
