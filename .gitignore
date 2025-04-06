@@ -27,6 +27,9 @@ npm-debug.log*
 # Coverage directory used by tools like istanbul
 coverage/
 
+# Mutation test reports
+reports/
+
 # IDE specific files
 .idea/
 .vscode/
@@ -36,3 +39,6 @@ coverage/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# stryker temp files
+.stryker-tmp
