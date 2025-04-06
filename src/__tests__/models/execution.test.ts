@@ -312,6 +312,84 @@ describe('ExecutionRepository', () => {
         .rejects
         .toThrow('Cannot start batch: execution is already in progress');
     });
+
+    it('should throw specific error when execution batch is not found', async () => {
+      // Arrange
+      const executionId = 'exec-123';
+      mockPrisma.execution.findUnique.mockResolvedValue({ 
+        id: executionId, 
+        status: ExecutionStatus.CREATED 
+      });
+      mockPrisma.executionBatch.findMany.mockResolvedValue([]);
+      
+      // Act & Assert
+      await expect(executionRepo.startBatch(executionId))
+        .rejects
+        .toThrow('No batches found for this execution');
+        
+      // This verifies that the code path checking for empty batches is protected
+    });
+    
+    it('should throw specific error when batch configuration is not found', async () => {
+      // Arrange
+      const executionId = 'exec-123';
+      mockPrisma.execution.findUnique.mockResolvedValue({ 
+        id: executionId, 
+        status: ExecutionStatus.CREATED 
+      });
+      mockPrisma.executionBatch.findMany.mockResolvedValue([
+        { id: 'exec-batch-1', batchId: 'batch-1', sequence: 1 }
+      ]);
+      mockPrisma.batch.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(executionRepo.startBatch(executionId))
+        .rejects
+        .toThrow('Batch configuration not found');
+    });
+
+    it('should only process online devices with precise verification', async () => {
+      // Arrange
+      const executionId = 'exec-123';
+      mockPrisma.execution.findUnique.mockResolvedValue({ 
+        id: executionId, 
+        status: ExecutionStatus.CREATED 
+      });
+      mockPrisma.executionBatch.findMany.mockResolvedValue([
+        { id: 'exec-batch-1', batchId: 'batch-1', sequence: 1 }
+      ]);
+      mockPrisma.batch.findUnique.mockResolvedValue({ id: 'batch-1' });
+      
+      // Create devices with mixed statuses
+      const mockBatchDevices = [
+        { deviceId: 'dev1' },
+        { deviceId: 'dev2' },
+        { deviceId: 'dev3' }
+      ];
+      mockPrisma.deviceBatch.findMany.mockResolvedValue(mockBatchDevices);
+      
+      const mockDevices = [
+        { id: 'dev1', status: DeviceStatus.ONLINE },
+        { id: 'dev2', status: DeviceStatus.OFFLINE }, // Should be filtered
+        { id: 'dev3', status: DeviceStatus.ONLINE }
+      ];
+      mockPrisma.device.findMany.mockResolvedValue(mockDevices);
+      
+      // Act
+      const result = await executionRepo.startBatch(executionId);
+      
+      // Assert
+      expect(result.devicesUpdated).toBe(2);
+      
+      // Verify that executionDeviceStatus was only created for online devices
+      const createCalls = mockPrisma.executionDeviceStatus.create.mock.calls;
+      const createdDeviceIds = createCalls.map((call: any) => call[0].data.deviceId);
+      
+      expect(createdDeviceIds).toContain('dev1');
+      expect(createdDeviceIds).toContain('dev3');
+      expect(createdDeviceIds).not.toContain('dev2');
+      expect(createCalls.length).toBe(2);
+    });
   });
 
   describe('recordDeviceUpdateResult', () => {
@@ -513,6 +591,45 @@ describe('ExecutionRepository', () => {
         result: null,
       });
     });
+
+    it('should correctly determine batch status with mixed device results', async () => {
+      const executionBatchId = 'exec-batch-1';
+      
+      // Test case: Mixed results - different device statuses
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue([
+        { deviceId: 'd1', updateSent: true, updateCompleted: true, succeeded: true },
+        { deviceId: 'd2', updateSent: true, updateCompleted: true, succeeded: false },
+        { deviceId: 'd3', updateSent: true, updateCompleted: false, succeeded: null }
+      ]);
+      
+      const incompleteResult = await executionRepo.checkBatchCompletion(executionBatchId);
+      expect(incompleteResult.isComplete).toBe(false);
+      expect(incompleteResult.result).toBe(null);
+      
+      // Not all devices have reported, so batch status should not be updated
+      expect(mockPrisma.executionBatch.update).not.toHaveBeenCalled();
+      
+      // Reset the mock for the next test
+      mockPrisma.executionBatch.update.mockClear();
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue([
+        { deviceId: 'd1', updateSent: true, updateCompleted: true, succeeded: true },
+        { deviceId: 'd2', updateSent: true, updateCompleted: true, succeeded: false },
+        { deviceId: 'd3', updateSent: true, updateCompleted: true, succeeded: true }
+      ]);
+      
+      const failedResult = await executionRepo.checkBatchCompletion(executionBatchId);
+      expect(failedResult.isComplete).toBe(true);
+      expect(failedResult.result).toBe(ExecutionBatchResult.FAILED);
+      
+      // Verify batch is updated with FAILED status
+      expect(mockPrisma.executionBatch.update).toHaveBeenCalledWith({
+        where: { id: executionBatchId },
+        data: {
+          status: ExecutionBatchStatus.COMPLETED,
+          result: ExecutionBatchResult.FAILED
+        }
+      });
+    });
   });
   
   describe('endMonitoringPeriod', () => {
@@ -613,6 +730,51 @@ describe('ExecutionRepository', () => {
         devicesReported: 0,
         totalDevices: 0,
       });
+    });
+
+    it('should throw specific error when execution batch is not found', async () => {
+      // Arrange
+      const executionBatchId = 'non-existent';
+      mockPrisma.executionBatch.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(executionRepo.endMonitoringPeriod(executionBatchId))
+        .rejects
+        .toThrow('Execution batch not found');
+    });
+    
+    it('should handle monitoring end time boundary conditions correctly', async () => {
+      const executionBatchId = 'exec-batch-1';
+      
+      // Use fake timers for precise date testing
+      jest.useFakeTimers();
+      const now = new Date('2023-04-06T10:00:00Z');
+      jest.setSystemTime(now);
+      
+      // Test when monitoring end time is exactly NOW
+      mockPrisma.executionBatch.findUnique.mockResolvedValue({
+        id: executionBatchId,
+        status: ExecutionBatchStatus.EXECUTING,
+        monitoringEndTime: new Date('2023-04-06T10:00:00Z'),
+      });
+      mockPrisma.executionDeviceStatus.findMany.mockResolvedValue([
+        { deviceId: 'd1', updateCompleted: true, succeeded: true }
+      ]);
+      
+      const exactResult = await executionRepo.endMonitoringPeriod(executionBatchId);
+      expect(exactResult.batchComplete).toBe(true); // Should complete at exact boundary
+      
+      // Test when monitoring end time is 1ms in the future
+      mockPrisma.executionBatch.findUnique.mockResolvedValue({
+        id: executionBatchId,
+        status: ExecutionBatchStatus.EXECUTING,
+        monitoringEndTime: new Date('2023-04-06T10:00:00.001Z'), // 1ms in future
+      });
+      
+      const futureResult = await executionRepo.endMonitoringPeriod(executionBatchId);
+      expect(futureResult.batchComplete).toBe(false); // Should not complete if still in future
+      
+      jest.useRealTimers();
     });
   });
   
@@ -738,6 +900,69 @@ describe('ExecutionRepository', () => {
 
       // Assert
       expect(result).toBeNull();
+    });
+
+    it('should correctly calculate monitoring end time based on batch configuration', async () => {
+      // Setup mocks for a completed current batch
+      mockPrisma.executionBatch.findUnique.mockResolvedValue({
+        id: 'exec-batch-1',
+        executionId: 'exec-123',
+        sequence: 1,
+        status: ExecutionBatchStatus.COMPLETED
+      });
+      
+      mockPrisma.executionBatch.findMany.mockResolvedValue([
+        { id: 'exec-batch-2', sequence: 2, status: ExecutionBatchStatus.PENDING, batchId: 'batch-2' }
+      ]);
+      
+      // Use fake timers for precise time testing
+      jest.useFakeTimers();
+      const now = new Date('2023-04-06T10:00:00Z');
+      jest.setSystemTime(now);
+      
+      // Test with non-default monitoring period
+      mockPrisma.batch.findUnique.mockResolvedValue({
+        id: 'batch-2',
+        monitoringPeriod: 12 // 12 hours
+      });
+      
+      mockPrisma.deviceBatch.findMany.mockResolvedValue([]);
+      mockPrisma.device.findMany.mockResolvedValue([]);
+      
+      await executionRepo.startNextBatch('exec-batch-1');
+      
+      // Verify monitoring end time is correctly calculated (12 hours later)
+      const expectedEndTime = new Date('2023-04-06T22:00:00Z');
+      const updatedBatch = mockPrisma.executionBatch.update.mock.calls[0][0];
+      expect(updatedBatch.data.monitoringEndTime.getTime()).toBe(expectedEndTime.getTime());
+      
+      // Reset mocks for next test
+      mockPrisma.executionBatch.update.mockClear();
+      
+      // Test with default monitoring period (when null/undefined)
+      mockPrisma.batch.findUnique.mockResolvedValue({
+        id: 'batch-2',
+        monitoringPeriod: null // Test default value
+      });
+      
+      await executionRepo.startNextBatch('exec-batch-1');
+      
+      // Verify default 24 hours is used
+      const defaultExpectedEndTime = new Date('2023-04-07T10:00:00Z');
+      const defaultUpdatedBatch = mockPrisma.executionBatch.update.mock.calls[0][0];
+      expect(defaultUpdatedBatch.data.monitoringEndTime.getTime()).toBe(defaultExpectedEndTime.getTime());
+      
+      jest.useRealTimers();
+    });
+    
+    it('should throw an error when current batch is not found', async () => {
+      // Arrange
+      mockPrisma.executionBatch.findUnique.mockResolvedValue(null);
+      
+      // Act & Assert
+      await expect(executionRepo.startNextBatch('non-existent'))
+        .rejects
+        .toThrow('Current batch not found');
     });
   });
   
