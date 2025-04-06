@@ -1,0 +1,11 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# Guidelines
+- Practice test-driven development. Before writing production code, think of how it will be used in the form of tests
+- Focus on getting the domain model right
+- Make a conscious effort to confine cognitively and computational dependencies to the periphery
+- When possible, adopt a functional style of programming

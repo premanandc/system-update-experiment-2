@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id                String              @id @default(uuid())
+  name              String
+  ipAddress         String?
+  type              String
+  status            DeviceStatus        @default(ONLINE)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  installedPackages DevicePackage[]
+  batches           DeviceBatch[]
+  executions        Execution[]
+
+  @@map("devices")
+}
+
+model Package {
+  id          String            @id @default(uuid())
+  name        String
+  version     String
+  vendor      String?
+  description String?
+  status      PackageStatus     @default(DRAFT)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  devices     DevicePackage[]
+  updates     UpdatePackage[]
+
+  @@unique([name, version])
+  @@map("packages")
+}
+
+model Update {
+  id          String          @id @default(uuid())
+  version     String
+  name        String
+  description String?
+  status      UpdateStatus    @default(DRAFT)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  packages    UpdatePackage[]
+  plans       Plan[]
+
+  @@map("updates")
+}
+
+model DevicePackage {
+  id            String    @id @default(uuid())
+  deviceId      String
+  packageId     String
+  installedDate DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  device        Device    @relation(fields: [deviceId], references: [id])
+  package       Package   @relation(fields: [packageId], references: [id])
+
+  @@unique([deviceId, packageId])
+  @@map("device_packages")
+}
+
+model Plan {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  updateId    String
+  status      PlanStatus  @default(DRAFT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  update      Update      @relation(fields: [updateId], references: [id])
+  batches     Batch[]
+  executions  Execution[]
+
+  @@map("plans")
+}
+
+model Batch {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  planId      String
+  sequence    Int
+  status      BatchStatus  @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  plan        Plan         @relation(fields: [planId], references: [id])
+  devices     DeviceBatch[]
+  executions  Execution[]
+
+  @@map("batches")
+}
+
+model DeviceBatch {
+  id        String   @id @default(uuid())
+  deviceId  String
+  batchId   String
+  createdAt DateTime @default(now())
+  device    Device   @relation(fields: [deviceId], references: [id])
+  batch     Batch    @relation(fields: [batchId], references: [id])
+
+  @@unique([deviceId, batchId])
+  @@map("device_batches")
+}
+
+model Execution {
+  id          String          @id @default(uuid())
+  deviceId    String
+  planId      String
+  batchId     String?
+  status      ExecutionStatus @default(PENDING)
+  startedAt   DateTime?
+  completedAt DateTime?
+  logs        String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  device      Device          @relation(fields: [deviceId], references: [id])
+  plan        Plan            @relation(fields: [planId], references: [id])
+  batch       Batch?          @relation(fields: [batchId], references: [id])
+
+  @@map("executions")
+}
+
+model UpdatePackage {
+  id        String   @id @default(uuid())
+  updateId  String
+  packageId String
+  createdAt DateTime @default(now())
+  update    Update   @relation(fields: [updateId], references: [id])
+  package   Package  @relation(fields: [packageId], references: [id])
+
+  @@unique([updateId, packageId])
+  @@map("update_packages")
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  DECOMMISSIONED
+}
+
+enum PackageStatus {
+  DRAFT
+  PUBLISHED
+  DEPRECATED
+  ARCHIVED
+}
+
+enum UpdateStatus {
+  DRAFT
+  PUBLISHED
+  TESTING
+  DEPLOYING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PlanStatus {
+  DRAFT
+  READY
+  EXECUTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BatchStatus {
+  PENDING
+  EXECUTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ExecutionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
