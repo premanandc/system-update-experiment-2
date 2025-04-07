@@ -234,7 +234,7 @@ describe('Update Execution Workflow', () => {
      */
     test('AND all devices in the batch complete successfully', async () => {
       if (!context.allDevicesInBatch || context.allDevicesInBatch.length === 0) {
-        console.log('No devices in batch, skipping this test');
+        // No devices in batch, skip this test
         return;
       }
       
@@ -271,7 +271,7 @@ describe('Update Execution Workflow', () => {
       });
       
       if (context.currentBatchIndex >= allBatches.length) {
-        console.log('No more batches to execute, skipping this test');
+        // No more batches to execute, skip this test
         return;
       }
       
@@ -335,8 +335,8 @@ describe('Update Execution Workflow', () => {
         );
         
         if (!startNextResult) {
-          console.log(`No more batches to start after batch ${i-1}`);
-          break;
+          // No more batches to start after this one
+          return;
         }
         
         // Update current batch ID
@@ -401,8 +401,6 @@ describe('Update Execution Workflow', () => {
       });
       
       expect(executionDetails?.status).toBe(ExecutionStatus.COMPLETED);
-      
-      console.log('Full execution workflow completed successfully');
     });
 
     /**
@@ -410,7 +408,7 @@ describe('Update Execution Workflow', () => {
      */
     test('AND pending updates are available for other devices', async () => {
       if (!context.otherDeviceId) {
-        console.log('No other device ID found, skipping this test');
+        // No other device ID found, skip this test
         return;
       }
       
@@ -423,8 +421,6 @@ describe('Update Execution Workflow', () => {
       expect(pendingUpdate.updateId).toBe(context.currentUpdate!.id);
       expect(pendingUpdate.planId).toBe(context.plan.id);
       expect(pendingUpdate.executionBatchId).toBe(context.executionBatchId);
-      
-      console.log('Full update workflow test completed successfully');
     });
   });
 });
@@ -590,7 +586,7 @@ async function then_a_device_reports_update_success() {
 async function then_all_devices_in_batch_report_success() {
   // Skip the first device as it's already been processed
   if (!context.allDevicesInBatch) {
-    console.log('No devices found in batch');
+    // No devices found in batch
     return;
   }
   
@@ -663,9 +659,7 @@ async function cleanup() {
     context.otherDeviceId = undefined;
     context.allDevicesInBatch = undefined;
     context.currentBatchIndex = 0;
-    
-    console.log('Cleanup completed');
   } catch (error) {
-    console.error('Error during cleanup:', error);
+    // Error during cleanup - can be ignored as this is just test cleanup
   }
 } 
