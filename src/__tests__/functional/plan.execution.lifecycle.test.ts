@@ -70,7 +70,26 @@ describe('Update Execution Workflow', () => {
   jest.setTimeout(60000);
 
   beforeAll(async () => {
-    await cleanup(); // Clean up any existing test data
+    // Clean up any existing test data from previous runs
+    await prisma.executionDeviceStatus.deleteMany({});
+    await prisma.executionBatch.deleteMany({});
+    await prisma.execution.deleteMany({});
+    await prisma.deviceBatch.deleteMany({});
+    await prisma.batch.deleteMany({});
+    await prisma.plan.deleteMany({});
+    await prisma.updatePackage.deleteMany({});
+    await prisma.update.deleteMany({});
+    await prisma.devicePackage.deleteMany({});
+    await prisma.device.deleteMany({});
+    await prisma.package.deleteMany({});
+
+    // Reset context
+    context.devices = [];
+    context.packages = [];
+    context.updates = [];
+    context.plans = [];
+    context.executions = [];
+    context.currentBatchIndex = 0;
   });
 
   afterAll(async () => {
@@ -586,7 +605,6 @@ async function then_a_device_reports_update_success() {
 async function then_all_devices_in_batch_report_success() {
   // Skip the first device as it's already been processed
   if (!context.allDevicesInBatch) {
-    // No devices found in batch
     return;
   }
   
@@ -609,57 +627,56 @@ async function findPackageByName(name: string) {
 }
 
 async function cleanup() {
-  try {
-    // Delete created entities in reverse order of creation
-    
-    // Delete executions
-    for (const id of context.executions) {
-      await prisma.execution.delete({ where: { id } }).catch(() => null);
-    }
-    
-    // Delete plans and their batches
-    for (const id of context.plans) {
-      await prisma.batch.deleteMany({ where: { planId: id } }).catch(() => null);
-      await prisma.plan.delete({ where: { id } }).catch(() => null);
-    }
-    
-    // Delete updates and their packages
-    for (const id of context.updates) {
-      await prisma.updatePackage.deleteMany({ where: { updateId: id } }).catch(() => null);
-      await prisma.update.delete({ where: { id } }).catch(() => null);
-    }
-    
-    // Delete device packages
-    await prisma.devicePackage.deleteMany({}).catch(() => null);
-    
-    // Delete devices
-    for (const id of context.devices) {
-      await prisma.device.delete({ where: { id } }).catch(() => null);
-    }
-    
-    // Delete packages
-    for (const id of context.packages) {
-      await prisma.package.delete({ where: { id } }).catch(() => null);
-    }
-    
-    // Reset context
-    context.devices = [];
-    context.packages = [];
-    context.updates = [];
-    context.plans = [];
-    context.executions = [];
-    context.currentUpdate = undefined;
-    context.oldPackage = undefined;
-    context.newPackage = undefined;
-    context.plan = undefined;
-    context.batches = undefined;
-    context.execution = undefined;
-    context.executionBatchId = undefined;
-    context.testDeviceId = undefined;
-    context.otherDeviceId = undefined;
-    context.allDevicesInBatch = undefined;
-    context.currentBatchIndex = 0;
-  } catch (error) {
-    // Error during cleanup - can be ignored as this is just test cleanup
-  }
+  // Delete created entities in reverse order to respect foreign key constraints
+  
+  // First delete all execution-device statuses
+  await prisma.executionDeviceStatus.deleteMany({});
+  
+  // Delete execution batches
+  await prisma.executionBatch.deleteMany({});
+  
+  // Delete executions
+  await prisma.execution.deleteMany({});
+  
+  // Delete device batches
+  await prisma.deviceBatch.deleteMany({});
+  
+  // Delete batches
+  await prisma.batch.deleteMany({});
+  
+  // Delete plans
+  await prisma.plan.deleteMany({});
+  
+  // Delete update packages
+  await prisma.updatePackage.deleteMany({});
+  
+  // Delete updates
+  await prisma.update.deleteMany({});
+  
+  // Delete device packages
+  await prisma.devicePackage.deleteMany({});
+  
+  // Delete devices
+  await prisma.device.deleteMany({});
+  
+  // Delete packages 
+  await prisma.package.deleteMany({});
+  
+  // Reset context
+  context.devices = [];
+  context.packages = [];
+  context.updates = [];
+  context.plans = [];
+  context.executions = [];
+  context.currentUpdate = undefined;
+  context.oldPackage = undefined;
+  context.newPackage = undefined;
+  context.plan = undefined;
+  context.batches = undefined;
+  context.execution = undefined;
+  context.executionBatchId = undefined;
+  context.testDeviceId = undefined;
+  context.otherDeviceId = undefined;
+  context.allDevicesInBatch = undefined;
+  context.currentBatchIndex = 0;
 } 
