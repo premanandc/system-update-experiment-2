@@ -20,11 +20,14 @@ import { execSync } from 'child_process';
  * to executing it on devices and verifying the results.
  */
 
-// Use the project's database
+// Define the database URL consistently for tests
+const TEST_DATABASE_URL = 'file:./prisma/test.db';
+
+// Use the test database
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: "file:./dev.db",
+      url: TEST_DATABASE_URL, // Use the defined test URL
     },
   },
 });
@@ -72,7 +75,7 @@ describe('Update Execution Workflow', () => {
 
   beforeAll(async () => {
     // Define test database URL
-    const TEST_DATABASE_URL = 'file:./prisma/test.db';
+    const TEST_DATABASE_URL = 'file:./prisma/test.db'; // Keep definition for clarity if needed
 
     // Ensure the database schema is up-to-date
     // If this fails, execSync will throw and Jest will fail the suite
