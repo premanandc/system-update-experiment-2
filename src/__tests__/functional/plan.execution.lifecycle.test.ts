@@ -73,7 +73,10 @@ describe('Update Execution Workflow', () => {
   beforeAll(async () => {
     // Ensure the database schema is up-to-date
     // If this fails, execSync will throw and Jest will fail the suite
-    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'ignore' });
+    console.log('Running prisma generate...'); // Add log for visibility
+    execSync('npx prisma generate', { stdio: 'inherit' }); // Generate client first
+    console.log('Running prisma db push...'); // Add log for visibility
+    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'inherit' }); // Push schema
 
     // Clean up any existing test data from previous runs using the cleanup function
     await cleanup(); // Use the existing cleanup function
