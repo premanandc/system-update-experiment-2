@@ -11,6 +11,7 @@ import { PrismaUpdateRepository } from '../../models/update';
 import { PrismaPlanRepository } from '../../models/plan';
 import { PrismaBatchRepository } from '../../models/batch';
 import { PrismaExecutionRepository } from '../../models/execution';
+import { execSync } from 'child_process';
 
 /**
  * Feature: System Update Workflow
@@ -70,26 +71,12 @@ describe('Update Execution Workflow', () => {
   jest.setTimeout(60000);
 
   beforeAll(async () => {
-    // Clean up any existing test data from previous runs
-    await prisma.executionDeviceStatus.deleteMany({});
-    await prisma.executionBatch.deleteMany({});
-    await prisma.execution.deleteMany({});
-    await prisma.deviceBatch.deleteMany({});
-    await prisma.batch.deleteMany({});
-    await prisma.plan.deleteMany({});
-    await prisma.updatePackage.deleteMany({});
-    await prisma.update.deleteMany({});
-    await prisma.devicePackage.deleteMany({});
-    await prisma.device.deleteMany({});
-    await prisma.package.deleteMany({});
+    // Ensure the database schema is up-to-date
+    // If this fails, execSync will throw and Jest will fail the suite
+    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'ignore' });
 
-    // Reset context
-    context.devices = [];
-    context.packages = [];
-    context.updates = [];
-    context.plans = [];
-    context.executions = [];
-    context.currentBatchIndex = 0;
+    // Clean up any existing test data from previous runs using the cleanup function
+    await cleanup(); // Use the existing cleanup function
   });
 
   afterAll(async () => {
@@ -628,7 +615,7 @@ async function findPackageByName(name: string) {
 
 async function cleanup() {
   // Delete created entities in reverse order to respect foreign key constraints
-  
+
   // First delete all execution-device statuses
   await prisma.executionDeviceStatus.deleteMany({});
   
