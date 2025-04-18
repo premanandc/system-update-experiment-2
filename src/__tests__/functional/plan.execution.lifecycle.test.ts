@@ -71,12 +71,15 @@ describe('Update Execution Workflow', () => {
   jest.setTimeout(60000);
 
   beforeAll(async () => {
+    // Define test database URL
+    const TEST_DATABASE_URL = 'file:./prisma/test.db';
+
     // Ensure the database schema is up-to-date
     // If this fails, execSync will throw and Jest will fail the suite
-    console.log('Running prisma generate...'); // Add log for visibility
-    execSync('npx prisma generate', { stdio: 'inherit' }); // Generate client first
-    console.log('Running prisma db push...'); // Add log for visibility
-    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'inherit' }); // Push schema
+    console.log('Running prisma generate...');
+    execSync('npx prisma generate', { stdio: 'inherit', env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL } });
+    console.log('Running prisma db push...');
+    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'inherit', env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL } });
 
     // Clean up any existing test data from previous runs using the cleanup function
     await cleanup(); // Use the existing cleanup function
